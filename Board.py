@@ -3,14 +3,21 @@ import os
 import pygame
 import random
 import time
+from analytics_tracker import AnalyticsTracker
 
+pygame.init()  # ← This must happen first
+tracker = AnalyticsTracker()
+screen_info = pygame.display.Info()
 
+###---Project Directory
 project_dir=os.path.dirname(os.path.abspath(__file__))
+###---Game imgaes
 asset_dir=os.path.join(project_dir,"Art_Assets\\")
 
 
 ###--- Load the image
 background = pygame.image.load(asset_dir+"background.png")
+
 board = pygame.image.load(asset_dir+"board.png")
 
 center_tile = pygame.image.load(asset_dir+"center_tile.png")
@@ -29,14 +36,27 @@ GREEN = (0, 255, 0)
 BOARD_SIZE = 500
 TILE_SIZE = 100
 ROWS, COLS = 5, 5
-WIDTH, HEIGHT = 700, 900
-
-offset_x = 100  # Try adjusting this interactively
-offset_y = 250  # Same here
+#WIDTH, HEIGHT = 700, 900
+#screen_info=pygame.display.Info()
+#info = pygame.display.Info()
+screen_width = screen_info.current_w
+screen_height = screen_info.current_h
+scale_factor = 0.8  # Use 80% of screen size, for example
+WIDTH = int(screen_width * scale_factor)
+HEIGHT = int(screen_height * scale_factor)
+#screen = pygame.display.set_mode((WIDTH, HEIGHT))
+offset_x = (WIDTH - BOARD_SIZE) // 2
+offset_y = (HEIGHT - BOARD_SIZE) // 2
+scaled_background = pygame.transform.scale(background, (WIDTH, HEIGHT))
+#offset_x = 100  # Try adjusting this interactively
+#offset_y = 250  # Same here
 ###--- Define corner and edge positions as (row, col) grid coordinates
 corner_positions = {(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)}
 edge_positions = set()
 clicks = []
+board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
+
+
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
@@ -69,6 +89,26 @@ def tile_center(row, col):
     y = offset_y + row * TILE_SIZE + TILE_SIZE // 2
     return (x, y)
 
+def check_winner(symbol):
+    # Horizontal
+    for r in range(ROWS):
+        if all(board_state[r][c] == symbol for c in range(COLS)):
+            return True
+
+    # Vertical
+    for c in range(COLS):
+        if all(board_state[r][c] == symbol for r in range(ROWS)):
+            return True
+
+    # Diagonal (\)
+    if all(board_state[i][i] == symbol for i in range(ROWS)):
+        return True
+
+    # Diagonal (/)
+    if all(board_state[i][COLS - 1 - i] == symbol for i in range(ROWS)):
+        return True
+
+    return False
 
 highlight_tile = None
 highlight_start_time = 0
@@ -85,14 +125,21 @@ turn_count = 0
 highlight_tile = None
 highlight_start_time = None
 pending_removal = False
+game_mode = "human_vs_ai"  # or "ai_vs_ai"
+visualize = True  # Toggle graphics on/off
+#if visualize:
+    # draw tiles, board, symbols, highlights...
 
 
 while running:
-    # 🖼️ Draw static elements
-    screen.blit(background, (0, 0))
+
+
+
+    ### Draw static elements
+    screen.blit(scaled_background, (0, 0))
     screen.blit(board, (offset_x, offset_y))  # if you want to offset it
 
-    # 🧱 Draw the grid of tiles
+    ### Draw the grid of tiles
     for row in range(ROWS):
         for col in range(COLS):
             x = offset_x + col * TILE_SIZE
@@ -125,6 +172,7 @@ while running:
 
             click_col = (mouse_x - offset_x) // TILE_SIZE
             click_row = (mouse_y - offset_y) // TILE_SIZE
+
             if 0 <= click_row < ROWS and 0 <= click_col < COLS:
                 center_x = offset_x + click_col * TILE_SIZE + TILE_SIZE // 2
                 center_y = offset_y + click_row * TILE_SIZE + TILE_SIZE // 2
@@ -138,8 +186,15 @@ while running:
                     elif event.button == 3:
                         clicks.append(("O", (center_x, center_y)))
                         turn_count += 1
-
+                    if not board_state[click_row][click_col]:  # tile unoccupied
+                        if event.button == 1:
+                            board_state[click_row][click_col] = "X"
+                            check_winner("X")
+                        elif event.button == 3:
+                            board_state[click_row][click_col] = "O"
+                            check_winner("O")
                 else: print("Invalid click")
+
 
     for symbol, (x, y) in clicks:
         if symbol == "X":

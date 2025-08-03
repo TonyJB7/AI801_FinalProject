@@ -19,7 +19,7 @@ GREEN = (0, 255, 0)
 
 ###--- Store click positions array for Left and Right Mouse Click
 Lclick_positions = []
-Rclick_possitions = []
+Rclick_positions = []
 # Main loop
 running = True
 while running:
@@ -33,7 +33,7 @@ while running:
         pygame.draw.line(screen, WHITE, (x - 10, y - 10), (x + 10, y + 10), 2)
         pygame.draw.line(screen, WHITE, (x - 10, y + 10), (x + 10, y - 10), 2)
     ###--- Right click  will be 0
-    for pos in Rclick_possitions:
+    for pos in Rclick_positions:
         x, y = pos
         pygame.draw.circle(screen, RED, (x - 10, y - 10), 10, 2)
 
@@ -48,7 +48,7 @@ while running:
                 Lclick_positions.append(mouse_pos)
                 print("Left click")
             elif event.button == 3:
-                Rclick_possitions.append(mouse_pos)
+                Rclick_positions.append(mouse_pos)
                 print("Right click")
             elif event.button == 2:
                 print("Middle click")
