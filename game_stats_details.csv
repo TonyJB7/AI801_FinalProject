@@ -1,0 +1,6 @@
+timestamp,playID,gameMode,player,position,shape,tiles_removed_pos
+2025-08-03 18:05:17.798,ABC1234,HvAI,Human,"[2, 2]",X,"['N', 'N']"
+2025-08-03 18:15:05.347,ABC1234,HvAI,Human,"[2, 2]",X,"['N', 'N']"
+2025-08-03 18:19:37.879,ABC1234,HvAI,Human,"[2, 2]",X,"['N', 'N']"
+2025-08-03 18:20:18.823,ABC1234,HvAI,Human,"[2, 2]",X,"['N', 'N']"
+2025-08-03 18:20:23.892,ABC1234,HvAI,Human,"[2, 2]",X,"['N', 'N']"
