@@ -5,8 +5,8 @@ from datetime import datetime
 class AnalyticsTrackerSummary:
     def __init__(self, filename="game_stats_summary.csv"):
         self.filename = filename
-        self.fieldnames = ["timestamp", "playID", "winner","Winmoves", "winShape", "lose",
-                           "loseShape", "loseMveos", "tiles_removed"]
+        self.fieldnames = ["timestamp", "playID", "winner","winmoves", "winshape", "lose",
+                           "loseShape", "losemoves", "tiles_removed"]
         self._ensure_file_exists()
 
     def _ensure_file_exists(self):
@@ -15,18 +15,18 @@ class AnalyticsTrackerSummary:
                 writer = csv.DictWriter(file, fieldnames=self.fieldnames)
                 writer.writeheader()
 
-    def log_game(self, playID, game_mode, winner, Winmoves, winShape,
-                 lose, loseMveos, loseShape, tiles_removed):
+    def log_game(self, play_id, game_mode, winner, winmoves, winshape,
+                 lose, losemoves, loseshape, tiles_removed):
         log_entry = {
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-            "playID": playID,
+            "play_id": play_id,
             "game_mode": game_mode,
             "winner": winner,
-            "Winmoves": Winmoves,
-            "winShape": winShape,
+            "winmoves": winmoves,
+            "winshape": winshape,
             "lose": lose,
-            "loseMveos": loseMveos,
-            "loseShape": loseShape,
+            "losemoves": losemoves,
+            "loseshape": loseshape,
             "tiles_removed": tiles_removed
         }
         with open(self.filename, mode="a", newline='') as file:
@@ -46,10 +46,10 @@ class AnalyticsTrackerDetails:
                 writer = csv.DictWriter(file, fieldnames=self.fieldnames)
                 writer.writeheader()
 
-    def log_game(self, playID, game_mode, player,position, shape, tiles_removed_pos):
+    def log_game(self, play_id, game_mode, player,position, shape, tiles_removed_pos):
         log_entry = {
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-            "playID": playID,
+            "play_id": play_id,
             "game_mode": game_mode,
             "player": player,
             "position": position,
