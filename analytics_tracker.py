@@ -16,7 +16,7 @@ class AnalyticsTrackerSummary:
                 writer.writeheader()
 
     def log_game(self, playID, game_mode, winner, Winmoves, winShape,
-                 lose, loseShape, loseMveos, tiles_removed):
+                 lose, loseMveos, loseShape, tiles_removed):
         log_entry = {
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
             "playID": playID,
@@ -25,8 +25,8 @@ class AnalyticsTrackerSummary:
             "Winmoves": Winmoves,
             "winShape": winShape,
             "lose": lose,
-            "loseShape": loseShape,
             "loseMveos": loseMveos,
+            "loseShape": loseShape,
             "tiles_removed": tiles_removed
         }
         with open(self.filename, mode="a", newline='') as file:
