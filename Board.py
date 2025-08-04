@@ -3,6 +3,7 @@ import os
 import pygame
 import random
 import time
+
 from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails
 
 trackerSummary = AnalyticsTrackerSummary()
@@ -232,7 +233,7 @@ while running:
 
 
 trackerSummary.log_game(
-    play_id="ABC12345",
+    play_id="ABC1234",
     game_mode = "HvAI",
     winner = "Human",
     win_moves= 22,
