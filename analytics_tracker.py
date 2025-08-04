@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 class AnalyticsTrackerSummary:
-    def __init__(self, filename="Analytics\game_stats_summary.csv"):
+    def __init__(self, filename="Analytics\\game_stats_summary.csv"):
         self.filename = filename
         self.fieldnames = ["timestamp", "playID", "winner","winmoves", "winshape", "lose",
                            "loseShape", "losemoves", "tiles_removed"]
@@ -34,7 +34,7 @@ class AnalyticsTrackerSummary:
             writer.writerow(log_entry)
 
 class AnalyticsTrackerDetails:
-    def __init__(self, filename="Analytics\game_stats_details.csv"):
+    def __init__(self, filename="Analytics\\game_stats_details.csv"):
         self.filename = filename
         self.fieldnames = ["timestamp", "playID", "gameMode","player","position",
                            "shape","tiles_removed_pos"]
@@ -46,7 +46,7 @@ class AnalyticsTrackerDetails:
                 writer = csv.DictWriter(file, fieldnames=self.fieldnames)
                 writer.writeheader()
 
-    def log_game(self, play_id, game_mode, player,position, shape, tiles_removed_pos):
+    def log_game(self, play_id, game_mode, player, position, shape, tiles_removed_pos):
         log_entry = {
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
             "play_id": play_id,
