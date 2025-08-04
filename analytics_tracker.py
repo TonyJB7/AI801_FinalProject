@@ -1,7 +1,7 @@
 import csv
 import os
 from datetime import datetime
-
+#This is the local version first and push will push it to cloud
 class AnalyticsTrackerSummary:
     def __init__(self, filename="Analytics\\game_stats_summary.csv"):
         self.filename = filename
