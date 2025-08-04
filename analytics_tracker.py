@@ -1,9 +1,9 @@
 import csv
 import os
 from datetime import datetime
-
+#not in the board directory
 class AnalyticsTrackerSummary:
-    def __init__(self, filename="Analytics\game_stats_summary.csv"):
+    def __init__(self, filename="game_stats_summary.csv"):
         self.filename = filename
         self.fieldnames = ["timestamp", "play_id", "game_mode", "winner","win_moves", "win_shape", "lose",
                            "lose_shape", "lose_moves", "tiles_removed"]
@@ -34,7 +34,7 @@ class AnalyticsTrackerSummary:
             writer.writerow(log_entry)
 
 class AnalyticsTrackerDetails:
-    def __init__(self, filename="Analytics\game_stats_details.csv"):
+    def __init__(self, filename="game_stats_details.csv"):
         self.filename = filename
         self.fieldnames = ["timestamp", "playID", "gameMode","player","position",
                            "shape","tiles_removed_pos"]
