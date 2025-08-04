@@ -3,10 +3,12 @@ import os
 import pygame
 import random
 import time
-from analytics_tracker import AnalyticsTracker
+from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails
+
+trackerSummary = AnalyticsTrackerSummary()
+trackerDetails = AnalyticsTrackerDetails()
 
 pygame.init()  # ← This must happen first
-tracker = AnalyticsTracker()
 screen_info = pygame.display.Info()
 
 ###---Project Directory
@@ -119,7 +121,6 @@ for r in range(ROWS):
             if r == 0 or c == 0 or r == ROWS - 1 or c == COLS - 1:
                 edge_positions.add((r, c))
 
-
 running = True
 turn_count = 0
 highlight_tile = None
@@ -132,8 +133,6 @@ visualize = True  # Toggle graphics on/off
 
 
 while running:
-
-
 
     ### Draw static elements
     screen.blit(scaled_background, (0, 0))
@@ -229,10 +228,28 @@ while running:
             highlight_tile = None
             highlight_start_time = None
 
-    pygame.display.flip()  # 🚨 Important: this makes all blitted surfaces visible
+    pygame.display.flip()  # Important: this makes all blitted surfaces visible
 
 
+trackerSummary.log_game(
+    play_id="ABC12345",
+    game_mode = "HvAI",
+    winner = "Human",
+    win_moves= 22,
+    win_shape= 'X',
+    lose = 'AI',
+    lose_moves = 21,
+    lose_shape = '0',
+    tiles_removed = 4)
 
+trackerDetails.log_game(
+    play_id= "ABC1234",
+    game_mode= "HvAI",
+    player= "Human",
+    position= [2,2],
+    shape= 'X',
+    tiles_removed_pos= ['N','N']
+)
 # Quit Pygame
 pygame.quit()
 sys.exit()
