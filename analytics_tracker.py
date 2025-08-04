@@ -5,8 +5,8 @@ from datetime import datetime
 class AnalyticsTrackerSummary:
     def __init__(self, filename="Analytics\game_stats_summary.csv"):
         self.filename = filename
-        self.fieldnames = ["timestamp", "playID", "winner","winmoves", "winshape", "lose",
-                           "loseShape", "losemoves", "tiles_removed"]
+        self.fieldnames = ["timestamp", "play_id", "game_mode", "winner","win_moves", "win_shape", "lose",
+                           "lose_shape", "lose_moves", "tiles_removed"]
         self._ensure_file_exists()
 
     def _ensure_file_exists(self):
