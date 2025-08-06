@@ -6,209 +6,181 @@ import time
 
 from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails
 
-trackerSummary = AnalyticsTrackerSummary()
-trackerDetails = AnalyticsTrackerDetails()
-
-pygame.init()  # ← This must happen first
+pygame.init()
 screen_info = pygame.display.Info()
 
-###---Project Directory
-project_dir=os.path.dirname(os.path.abspath(__file__))
-###---Game imgaes
-asset_dir=os.path.join(project_dir,"Art_Assets\\")
+# Directories
+project_dir = os.path.dirname(os.path.abspath(__file__))
+asset_dir = os.path.join(project_dir, "Art_Assets\\")
 
+# Assets
+background = pygame.image.load(asset_dir + "background.png")
+board = pygame.image.load(asset_dir + "board.png")
+center_tile = pygame.image.load(asset_dir + "center_tile.png")
+corner_tile = pygame.image.load(asset_dir + "corner_tile.png")
+edge_tile = pygame.image.load(asset_dir + "edge_tile.png")
 
-###--- Load the image
-background = pygame.image.load(asset_dir+"background.png")
+# Colors
+WHITE, BLACK, GRAY = (255, 255, 255), (0, 0, 0), (128, 128, 128)
+RED, BLUE, GREEN = (255, 0, 0), (0, 0, 255), (0, 255, 0)
 
-board = pygame.image.load(asset_dir+"board.png")
-
-center_tile = pygame.image.load(asset_dir+"center_tile.png")
-corner_tile = pygame.image.load(asset_dir+"corner_tile.png")
-edge_tile = pygame.image.load(asset_dir+"edge_tile.png")
-
-###--- Colors to be used in the game
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GRAY = (128,128,128)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
-
-###--- Resolution setting
+# Board settings
 BOARD_SIZE = 500
 TILE_SIZE = 100
 ROWS, COLS = 5, 5
-#WIDTH, HEIGHT = 700, 900
-#screen_info=pygame.display.Info()
-#info = pygame.display.Info()
-screen_width = screen_info.current_w
-screen_height = screen_info.current_h
-scale_factor = 0.8  # Use 80% of screen size, for example
-WIDTH = int(screen_width * scale_factor)
-HEIGHT = int(screen_height * scale_factor)
-#screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+# Screen setup
+scale_factor = 0.8
+WIDTH = int(screen_info.current_w * scale_factor)
+HEIGHT = int(screen_info.current_h * scale_factor)
 offset_x = (WIDTH - BOARD_SIZE) // 2
 offset_y = (HEIGHT - BOARD_SIZE) // 2
 scaled_background = pygame.transform.scale(background, (WIDTH, HEIGHT))
-#offset_x = 100  # Try adjusting this interactively
-#offset_y = 250  # Same here
-###--- Define corner and edge positions as (row, col) grid coordinates
-corner_positions = {(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)}
-edge_positions = set()
-clicks = []
-board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
-
-
-pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-def get_corner_rotation(row, col):
-    if row == 0 and col == 0:       # Top-left corner
-        return 0
-    elif row == 0 and col == COLS - 1:  # Top-right
-        return 270
-    elif row == ROWS - 1 and col == COLS - 1:  # Bottom-right
-        return 180
-    elif row == ROWS - 1 and col == 0:        # Bottom-left
-        return 90
-    return 0  # fallback
+# Game state
+corner_positions = {(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)}
+edge_positions = {(r, c) for r in range(ROWS) for c in range(COLS)
+                  if (r, c) not in corner_positions and (r == 0 or c == 0 or r == ROWS - 1 or c == COLS - 1)}
+clicks = []
+board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
+highlight_tile = None
+highlight_start_time = None
+interaction_paused = False
+pending_removal = False
+game_over = False
+turn_count = 0
+game_mode = "human_vs_ai"
+visualize = True
+debug_mode = True  # Toggle for debug prints
 
+trackerSummary = AnalyticsTrackerSummary()
+trackerDetails = AnalyticsTrackerDetails()
+
+# Utility functions
+def get_corner_rotation(row, col):
+    return {(0, 0): 0, (0, COLS - 1): 270, (ROWS - 1, COLS - 1): 180, (ROWS - 1, 0): 90}.get((row, col), 0)
 
 def get_edge_rotation(row, col):
-    if row == 0: return 0          # Top edge
-    elif col == COLS - 1: return 270   # Right edge
-    elif row == ROWS - 1: return 180  # Bottom edge
-    elif col == 0: return 90       # Left edge
+    if row == 0: return 0
+    elif col == COLS - 1: return 270
+    elif row == ROWS - 1: return 180
+    elif col == 0: return 90
     return 0
 
 def choose_random_tile():
-    r = random.randint(0, ROWS - 1)
-    c = random.randint(0, COLS - 1)
-    return (r, c)
+    return random.randint(0, ROWS - 1), random.randint(0, COLS - 1)
 
-def tile_center(row, col):
-    x = offset_x + col * TILE_SIZE + TILE_SIZE // 2
-    y = offset_y + row * TILE_SIZE + TILE_SIZE // 2
-    return (x, y)
+def get_tile_from_click(pos):
+    x, y = pos
+    col = (x - offset_x) // TILE_SIZE
+    row = (y - offset_y) // TILE_SIZE
+    return row, col
+
+def draw_symbol(surface, symbol, x, y):
+    if symbol == "X":
+        pygame.draw.line(surface, RED, (x - 25, y - 25), (x + 25, y + 25), 5)
+        pygame.draw.line(surface, RED, (x - 25, y + 25), (x + 25, y - 25), 5)
+    elif symbol == "O":
+        pygame.draw.circle(surface, GREEN, (x, y), 25, 5)
 
 def check_winner(symbol):
-    # Horizontal
     for r in range(ROWS):
         if all(board_state[r][c] == symbol for c in range(COLS)):
             return True
-
-    # Vertical
     for c in range(COLS):
         if all(board_state[r][c] == symbol for r in range(ROWS)):
             return True
-
-    # Diagonal (\)
     if all(board_state[i][i] == symbol for i in range(ROWS)):
         return True
-
-    # Diagonal (/)
     if all(board_state[i][COLS - 1 - i] == symbol for i in range(ROWS)):
         return True
-
     return False
 
-highlight_tile = None
-highlight_start_time = 0
+def show_game_over_screen(winner):
+    overlay = pygame.Surface((WIDTH, HEIGHT))
+    overlay.set_alpha(180)
+    overlay.fill(BLACK)
+    font = pygame.font.SysFont("Arial", 48)
+    text = font.render(f"{winner} wins!", True, WHITE)
+    textinput = font.render("Press Esc to quit or R to restart", True, WHITE)
+    screen.blit(overlay, (0, 0))
+    screen.blit(text, text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+    screen.blit(textinput, textinput.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50)))
+    pygame.display.flip()
+    time.sleep(2)
 
-for r in range(ROWS):
-    for c in range(COLS):
-        if (r, c) not in corner_positions:
-            if r == 0 or c == 0 or r == ROWS - 1 or c == COLS - 1:
-                edge_positions.add((r, c))
+def reset_game():
+    global board_state, clicks, turn_count, highlight_tile, highlight_start_time
+    global pending_removal, interaction_paused, game_over
+    board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
+    clicks = []
+    turn_count = 0
+    highlight_tile = None
+    highlight_start_time = None
+    pending_removal = False
+    interaction_paused = False
+    game_over = False
 
-running = True
-turn_count = 0
-highlight_tile = None
-highlight_start_time = None
-pending_removal = False
-game_mode = "human_vs_ai"  # or "ai_vs_ai"
-visualize = True  # Toggle graphics on/off
-#if visualize:
-    # draw tiles, board, symbols, highlights...
+def wait_for_game_over_input():
+    global running
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                waiting = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                    waiting = False
+                elif event.key == pygame.K_r:
+                    reset_game()
+                    waiting = False
 
-
-while running:
-
-    ### Draw static elements
+def draw_board():
     screen.blit(scaled_background, (0, 0))
-    screen.blit(board, (offset_x, offset_y))  # if you want to offset it
-
-    ### Draw the grid of tiles
+    screen.blit(board, (offset_x, offset_y))
     for row in range(ROWS):
         for col in range(COLS):
             x = offset_x + col * TILE_SIZE
             y = offset_y + row * TILE_SIZE
-
             if (row, col) in corner_positions:
                 tile = pygame.transform.rotate(corner_tile, get_corner_rotation(row, col))
             elif (row, col) in edge_positions:
                 tile = pygame.transform.rotate(edge_tile, get_edge_rotation(row, col))
             else:
                 tile = center_tile
-
             screen.blit(tile, (x, y))
 
-            ##font = pygame.font.SysFont(None, 24)
-           ## label = font.render(f"({row},{col})", True, (255, 0, 0))
-    hover_mouse_x, hover_mouse_y = pygame.mouse.get_pos()
-    hover_col = (hover_mouse_x - offset_x) // TILE_SIZE
-    hover_row = (hover_mouse_y - offset_y) // TILE_SIZE
+def handle_click(event):
+    global turn_count
+    if interaction_paused or game_over:
+        return
+    mouse_pos = pygame.mouse.get_pos()
+    row, col = get_tile_from_click(mouse_pos)
+    if 0 <= row < ROWS and 0 <= col < COLS:
+        if board_state[row][col] == "":
+            clicks.append(("X" if event.button == 1 else "O", (row, col)))
+            board_state[row][col] = "X" if event.button == 1 else "O"
+            turn_count += 1
+            if debug_mode:
+                print(f"Click: {board_state[row][col]} at ({row}, {col})")
 
-    if 0 <= hover_row < ROWS and 0 <= hover_col < COLS:
-        hover_x = offset_x + hover_col * TILE_SIZE
-        hover_y = offset_y + hover_row * TILE_SIZE
-        pygame.draw.rect(screen, (255, 255, 0), (hover_x, hover_y, TILE_SIZE, TILE_SIZE), 3)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        if event.type == pygame.MOUSEBUTTONDOWN:
+def update_game_state():
+    global highlight_tile, highlight_start_time, pending_removal, interaction_paused
+    global game_over, turn_count
 
-            click_col = (mouse_x - offset_x) // TILE_SIZE
-            click_row = (mouse_y - offset_y) // TILE_SIZE
-
-            if 0 <= click_row < ROWS and 0 <= click_col < COLS:
-                center_x = offset_x + click_col * TILE_SIZE + TILE_SIZE // 2
-                center_y = offset_y + click_row * TILE_SIZE + TILE_SIZE // 2
-                center = (center_x, center_y)
-                if not any(pos == center for _, pos in clicks):
-
-                    if event.button == 1:
-                        clicks.append(("X", (center_x, center_y)))
-                        turn_count += 1
-
-                    elif event.button == 3:
-                        clicks.append(("O", (center_x, center_y)))
-                        turn_count += 1
-                    if not board_state[click_row][click_col]:  # tile unoccupied
-                        if event.button == 1:
-                            board_state[click_row][click_col] = "X"
-                            check_winner("X")
-                        elif event.button == 3:
-                            board_state[click_row][click_col] = "O"
-                            check_winner("O")
-                else: print("Invalid click")
-
-
-    for symbol, (x, y) in clicks:
-        if symbol == "X":
-            pygame.draw.line(screen, RED, (x - 25, y - 25), (x + 25, y + 25), 5)
-            pygame.draw.line(screen, RED, (x - 25, y + 25), (x + 25, y - 25), 5)
-        elif symbol == "O":
-            pygame.draw.circle(screen, GREEN, (x, y), 25, 5)
+    for symbol, (row, col) in clicks:
+        x = offset_x + col * TILE_SIZE + TILE_SIZE // 2
+        y = offset_y + row * TILE_SIZE + TILE_SIZE // 2
+        draw_symbol(screen, symbol, x, y)
 
     if turn_count % 5 == 0 and turn_count != 0 and not pending_removal:
-        r, c = choose_random_tile()
-        highlight_tile = (r, c)
+        highlight_tile = choose_random_tile()
         highlight_start_time = time.time()
         pending_removal = True
-
+        interaction_paused = True
         turn_count = 0
 
     if highlight_tile and pending_removal:
@@ -216,45 +188,94 @@ while running:
         row, col = highlight_tile
         tile_x = offset_x + col * TILE_SIZE
         tile_y = offset_y + row * TILE_SIZE
-
-        # Flashing effect: alternate thickness based on time
-        pulse = int((elapsed * 4) % 2)  # toggles between 0 and 1 every 0.25s
-        thickness = 3 if pulse else 6
+        thickness = 6 if int((elapsed * 4) % 2) else 3
         pygame.draw.rect(screen, RED, (tile_x, tile_y, TILE_SIZE, TILE_SIZE), thickness)
-
         if elapsed >= 2:
-            center = offset_x + col * TILE_SIZE + TILE_SIZE // 2, offset_y + row * TILE_SIZE + TILE_SIZE // 2
-            clicks = [item for item in clicks if item[1] != center]
-            pending_removal = False
+            clicks[:] = [item for item in clicks if item[1] != highlight_tile]
+            board_state[row][col] = ""
             highlight_tile = None
             highlight_start_time = None
+            pending_removal = False
+            interaction_paused = False
 
-    pygame.display.flip()  # Important: this makes all blitted surfaces visible
+# Main loop
+running = True
+while running:
+    draw_board()
+
+    if not interaction_paused and not game_over:
+        mouse_pos = pygame.mouse.get_pos()
+        hover_row, hover_col = get_tile_from_click(mouse_pos)
+        if 0 <= hover_row < ROWS and 0 <= hover_col < COLS:
+            hover_x = offset_x + hover_col * TILE_SIZE
+            hover_y = offset_y + hover_row * TILE_SIZE
+            pygame.draw.rect(screen, (255, 255, 0), (hover_x, hover_y, TILE_SIZE, TILE_SIZE), 3)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            handle_click(event)
+
+    update_game_state()
 
 
+    # Check for winner
+    if check_winner("X") or check_winner("O"):
+        winner = "X" if check_winner("X") else "O"
+        show_game_over_screen(winner)
+        game_over = True
+
+        if game_mode == "human_vs_ai":
+            wait_for_game_over_input()
+            game_over = False
+        elif game_mode == "ai_vs_ai":
+            reset_game()
+            game_over = False
+    # Check for draw
+    if not check_winner("X") and not check_winner("O"):
+        #board_full = all(board[row][col] != "" for row in range(ROWS) for col in range(COLS))
+        ###--- Board state tracks the moves
+        board_full = all(board_state[row][col] != "" for row in range(ROWS) for col in range(COLS))
+        if board_full:
+            show_game_over_screen("Draw")
+            game_over = True
+
+            if game_mode == "human_vs_ai":
+                wait_for_game_over_input()
+                game_over = False
+            elif game_mode == "ai_vs_ai":
+                pygame.time.wait(1000)  # Optional short pause
+                reset_game()
+                game_over = False
+
+
+    pygame.display.flip()
+
+# Final analytics logging (optional — move inside game-over logic if needed)
 trackerSummary.log_game(
     play_id="ABC1234",
-    game_mode = "HvAI",
-    winner = "Human",
-    win_moves= 22,
-    win_shape= 'X',
-    lose = 'AI',
-    lose_moves = 21,
-    lose_shape = '0',
-    tiles_removed = 4)
+    game_mode="HvAI",
+    winner="Human",
+    win_moves=22,
+    win_shape='X',
+    lose='AI',
+    lose_moves=21,
+    lose_shape='O',
+    tiles_removed=4
+)
 
 trackerDetails.log_game(
-    play_id= "ABC1234",
-    game_mode= "HvAI",
-    player= "Human",
-    position= [2,2],
-    shape= 'X',
-    tiles_removed_pos= ['N','N']
+    play_id="ABC1234",
+    game_mode="HvAI",
+    player="Human",
+    position=[2, 2],
+    shape='X',
+    tiles_removed_pos=['N', 'N']
 )
-# Quit Pygame
+
 pygame.quit()
 sys.exit()
-
 
 
 
