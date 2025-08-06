@@ -1,10 +1,14 @@
-import sys
 import os
-import pygame
 import random
+import sys
 import time
+from operator import truediv
+
+import pygame
 
 from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails
+from mcts_AI import MonteCarloAI
+
 
 pygame.init()
 screen_info = pygame.display.Info()
@@ -53,6 +57,7 @@ turn_count = 0
 game_mode = "human_vs_ai"
 visualize = True
 debug_mode = True  # Toggle for debug prints
+current_player = "Human"  # or "AI" if AI goes first
 
 trackerSummary = AnalyticsTrackerSummary()
 trackerDetails = AnalyticsTrackerDetails()
@@ -164,6 +169,7 @@ def handle_click(event):
             clicks.append(("X" if event.button == 1 else "O", (row, col)))
             board_state[row][col] = "X" if event.button == 1 else "O"
             turn_count += 1
+
             if debug_mode:
                 print(f"Click: {board_state[row][col]} at ({row}, {col})")
 
@@ -197,12 +203,26 @@ def update_game_state():
             highlight_start_time = None
             pending_removal = False
             interaction_paused = False
+def handle_human_turn(pos):
+    row, col = get_tile_from_click(pos)
+    if board_state[row][col] == "":
+        board_state[row][col] = "X"
+        clicks.append(("X", (row, col)))
+        return True
+    return False
 
-# Main loop
-running = True
+def handle_ai_turn():
+    ai = MonteCarloAI("O", "X", simulations=300)
+    ai.run_simulation(board_state)
+    move = ai.get_best_move()
+    board_state[move[0]][move[1]] = "O"
+    clicks.append(("O", move))
+###---Main
+running=True
 while running:
     draw_board()
 
+    # Hover highlight
     if not interaction_paused and not game_over:
         mouse_pos = pygame.mouse.get_pos()
         hover_row, hover_col = get_tile_from_click(mouse_pos)
@@ -211,46 +231,52 @@ while running:
             hover_y = offset_y + hover_row * TILE_SIZE
             pygame.draw.rect(screen, (255, 255, 0), (hover_x, hover_y, TILE_SIZE, TILE_SIZE), 3)
 
+    # Event handling
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            handle_click(event)
+
+        if game_mode == "human_vs_ai":
+            if current_player == "Human":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if handle_human_turn(pygame.mouse.get_pos()):
+                        current_player = "AI"
+
+    # AI turn outside event loop
+    if game_mode == "human_vs_ai" and current_player == "AI":
+        handle_ai_turn()
+        current_player = "Human"
 
     update_game_state()
 
-
-    # Check for winner
+    # Win check
     if check_winner("X") or check_winner("O"):
         winner = "X" if check_winner("X") else "O"
         show_game_over_screen(winner)
         game_over = True
-
         if game_mode == "human_vs_ai":
             wait_for_game_over_input()
             game_over = False
         elif game_mode == "ai_vs_ai":
             reset_game()
             game_over = False
-    # Check for draw
+
+    # Draw check
     if not check_winner("X") and not check_winner("O"):
-        #board_full = all(board[row][col] != "" for row in range(ROWS) for col in range(COLS))
-        ###--- Board state tracks the moves
         board_full = all(board_state[row][col] != "" for row in range(ROWS) for col in range(COLS))
         if board_full:
             show_game_over_screen("Draw")
             game_over = True
-
             if game_mode == "human_vs_ai":
                 wait_for_game_over_input()
                 game_over = False
             elif game_mode == "ai_vs_ai":
-                pygame.time.wait(1000)  # Optional short pause
+                pygame.time.wait(1000)
                 reset_game()
                 game_over = False
 
-
     pygame.display.flip()
+
 
 # Final analytics logging (optional — move inside game-over logic if needed)
 trackerSummary.log_game(
