@@ -1,72 +1,86 @@
+###--------------------------------------------------------------------------------
+### Game: Disrupt-O-Tac
+### Authors: Project Group 2 - Amir Ayazi, Antonio Blanco
+### Date:
+### Description
+###---------------------------------------------------------------------------------
+
+###--- Libraries
 import os
 import random
 import sys
 import time
-
-
 import pygame
 
-
+###--- External modules coded by project team
 from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails
 from mcts_AI import MonteCarloAI
 
-
+###-------------------------------------------------
+### Initialization of variables, setting, options
+###
+###--------------------------------------------------
 pygame.init()
 screen_info = pygame.display.Info()
 
-# Directories
+###--- Directories for assets will be relative path
 project_dir = os.path.dirname(os.path.abspath(__file__))
 asset_dir = os.path.join(project_dir, "Art_Assets\\")
 
-# Assets
-background = pygame.image.load(asset_dir + "background.png")
-board = pygame.image.load(asset_dir + "board.png")
+###---Simple assets created in GIMP
+background = pygame.image.load(asset_dir + "background.png")###---Clouds
+board = pygame.image.load(asset_dir + "board.png")###--- board solid (not visible by users)
+
+###--- The tiles of the game. 3 created and programmatically duplicated
 center_tile = pygame.image.load(asset_dir + "center_tile.png")
 corner_tile = pygame.image.load(asset_dir + "corner_tile.png")
 edge_tile = pygame.image.load(asset_dir + "edge_tile.png")
 
-# Colors
+###--- Basic  Colors
 WHITE, BLACK, GRAY = (255, 255, 255), (0, 0, 0), (128, 128, 128)
 RED, BLUE, GREEN = (255, 0, 0), (0, 0, 255), (0, 255, 0)
 
-# Board settings
+###--- Board settings (Do not change as it is sized properly) if need to change the
+###--- size of the game. Use scale_factor
 BOARD_SIZE = 500
 TILE_SIZE = 100
 ROWS, COLS = 5, 5
 
-# Screen setup
+###--- Screen setup
 scale_factor = 0.8
 WIDTH = int(screen_info.current_w * scale_factor)
 HEIGHT = int(screen_info.current_h * scale_factor)
 offset_x = (WIDTH - BOARD_SIZE) // 2
 offset_y = (HEIGHT - BOARD_SIZE) // 2
+
+###--- Scales based on screen resolution
 scaled_background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-# Game state
+####--- Init Game state
 corner_positions = {(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)}
 edge_positions = {(r, c) for r in range(ROWS) for c in range(COLS)
                   if (r, c) not in corner_positions and (r == 0 or c == 0 or r == ROWS - 1 or c == COLS - 1)}
 clicks = []
 board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
+###--- Booleans
 highlight_tile = None
 highlight_start_time = None
 interaction_paused = False
 pending_removal = False
 game_over = False
-turn_count = 0
-game_mode = "human_vs_ai"
 visualize = True
 debug_mode = True  # Toggle for debug prints
-current_player = "Human"  # or "AI" if
+current_player = "Human"  # or "AI" if AI goes first
+turn_count = 0
+game_mode = "human_vs_ai"
 
-# AI goes first
-
+###--- Initializing the analytics
 trackerSummary = AnalyticsTrackerSummary()
 trackerDetails = AnalyticsTrackerDetails()
 AI_MOVE_EVENT = pygame.USEREVENT + 1
 
-# Utility functions
+###--- Utility functions
 def get_corner_rotation(row, col):
     return {(0, 0): 0, (0, COLS - 1): 270, (ROWS - 1, COLS - 1): 180, (ROWS - 1, 0): 90}.get((row, col), 0)
 
@@ -222,7 +236,7 @@ def handle_human_turn(pos):
         clicks.append(("X", (row, col)))
         current_player = "AI"
         turn_count += 1
-        # Delay AI move to allow rendering and trap animation
+        ###--- Delay AI move to allow rendering and trap animation
         pygame.time.set_timer(AI_MOVE_EVENT, 500)  # 500ms delay
 
         return True
@@ -276,7 +290,7 @@ while running:
 
     update_game_state()
 
-    # Win check
+    ###--- Win check
     if check_winner("X") or check_winner("O"):
         winner = "X" if check_winner("X") else "O"
         show_game_over_screen(winner)
@@ -288,7 +302,7 @@ while running:
             reset_game()
             game_over = False
 
-    # Draw check
+    ###--- Draw check
     if not check_winner("X") and not check_winner("O"):
         board_full = all(board_state[row][col] != "" for row in range(ROWS) for col in range(COLS))
         if board_full:
@@ -305,7 +319,7 @@ while running:
     pygame.display.flip()
 
 
-# Final analytics logging (optional — move inside game-over logic if needed)
+###--- Final analytics logging (optional — move inside game-over logic if needed)
 trackerSummary.log_game(
     play_id="ABC1234",
     game_mode="HvAI",
