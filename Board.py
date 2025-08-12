@@ -117,30 +117,68 @@ class Player:
     def play_ai_move(self):
         if not self.is_ai or not self.agent:
             print(f"[ERROR] {self.name} has no valid AI agent.")
-            return
+            return False
 
         print(f"AI turn started for {self.name}")
         start_time = time.time()
 
-        move = None
-        if isinstance(self.agent, MonteCarloAI):
-            self.agent.run_simulation(board_state)
-            move = self.agent.get_best_move()
-        elif hasattr(self.agent, "select_move"):
-            move = self.agent.select_move(board_state, self.symbol, self.iterations)
+        opponent_symbol = "O" if self.symbol == "X" else "X"
+        move = handle_ai_turn(self.name, self.agent, self.iterations, self.symbol, opponent_symbol)
 
         if move:
             board_state[move[0]][move[1]] = self.symbol
             clicks.append((self.symbol, move))
             end_time = time.time()
             print(f"{self.name} placed {self.symbol} at {move}, took {end_time - start_time:.3f}s")
+            return True
+
+        print(f"[WARNING] {self.name} failed to select a move.")
+        return False
     # def play_ai_move(self):
-    #     if self.agent and hasattr(self.agent, "select_move"):
-    #         row, col = self.agent.select_move(board_state, self.symbol, self.iterations)
-    #         board_state[row][col] = self.symbol
-    #         print(f"{self.name} placed {self.symbol} at ({row}, {col})")
-    #     else:
-    #         print(f"Invalid agent assigned to {self.name}. Ensure agent has a select_move")
+    #     if not self.is_ai or not self.agent:
+    #         print(f"[ERROR] {self.name} has no valid AI agent.")
+    #         return False  #  No move placed
+    #
+    #     print(f"AI turn started for {self.name}")
+    #     start_time = time.time()
+    #
+    #     move = None
+    #     if isinstance(self.agent, MonteCarloAI):
+    #         self.agent.run_simulation(board_state)
+    #         move = self.agent.get_best_move()
+    #     elif hasattr(self.agent, "select_move"):
+    #         move = self.agent.select_move(board_state, self.symbol, self.iterations)
+    #
+    #     if move:
+    #         board_state[move[0]][move[1]] = self.symbol
+    #         clicks.append((self.symbol, move))
+    #         end_time = time.time()
+    #         print(f"{self.name} placed {self.symbol} at {move}, took {end_time - start_time:.3f}s")
+    #         return True  #  Move was placed
+    #
+    #     print(f"[WARNING] {self.name} failed to select a move.")
+    #     return False  #  No move placed
+    # def play_ai_move(self):
+    #     if not self.is_ai or not self.agent:
+    #         print(f"[ERROR] {self.name} has no valid AI agent.")
+    #         return
+    #
+    #     print(f"AI turn started for {self.name}")
+    #     start_time = time.time()
+    #
+    #     move = None
+    #     if isinstance(self.agent, MonteCarloAI):
+    #         self.agent.run_simulation(board_state)
+    #         move = self.agent.get_best_move()
+    #     elif hasattr(self.agent, "select_move"):
+    #         move = self.agent.select_move(board_state, self.symbol, self.iterations)
+    #
+    #     if move:
+    #         board_state[move[0]][move[1]] = self.symbol
+    #         clicks.append((self.symbol, move))
+    #         end_time = time.time()
+    #         print(f"{self.name} placed {self.symbol} at {move}, took {end_time - start_time:.3f}s")
+
 
 class TurnManager:
     def __init__(self, mode):
@@ -392,7 +430,7 @@ def handle_start_screen_click(pos):
 
     if game_mode != previous_game_mode:
         logging.debug(f"[WARNING] game_mode changed in draw start screen from {previous_game_mode} to {game_mode}")
-    previous_game_mode = game_mode
+        previous_game_mode = game_mode
 def get_corner_rotation(row, col):
     return {(0, 0): 0, (0, COLS - 1): 270, (ROWS - 1, COLS - 1): 180, (ROWS - 1, 0): 90}.get((row, col), 0)
 
@@ -541,6 +579,23 @@ def create_players(game_mode, selected_agent_ai1, selected_agent_ai2, iterations
         ]
     else:
         raise ValueError(f"Unsupported game mode: {game_mode}")
+def create_players_delete(game_mode, selected_agent_ai1, selected_agent_ai2, iterations_ai1, iterations_ai2):
+    if game_mode == "human_vs_ai":
+        return [
+            Player(name="Human", is_ai=False, symbol="X"),
+            Player(name="AI1", is_ai=True, symbol="O",
+                   agent=get_agent(selected_agent_ai1, "O", "X", iterations_ai1),
+                   iterations=iterations_ai1)
+        ]
+    elif game_mode == "ai_vs_ai":
+        return [
+            Player(name="AI1", is_ai=True, symbol="X",
+                   agent=get_agent(selected_agent_ai1, "X", "O", iterations_ai1),
+                   iterations=iterations_ai1),
+            Player(name="AI2", is_ai=True, symbol="O",
+                   agent=get_agent(selected_agent_ai2, "O", "X", iterations_ai2),
+                   iterations=iterations_ai2)
+        ]
 
 def trap_tile():
     global highlight_tile, highlight_start_time, pending_removal, interaction_paused
@@ -677,7 +732,28 @@ def is_click_stable(pos1, pos2, tolerance=5):
         return False
     return abs(pos1[0] - pos2[0]) <= tolerance and abs(pos1[1] - pos2[1]) <= tolerance
 
+def handle_trap_logic():
+    global interaction_paused, ai_next_move_time
 
+    if trap_manager.should_trigger(turn_manager.turn_count):
+        trap_manager.trigger()
+        interaction_paused = True
+
+    if trap_manager.active:
+        removed = trap_manager.update(screen)
+        if removed:
+            interaction_paused = False
+            current_player = turn_manager.get_current_player()
+            if current_player.startswith("AI"):
+                ai_next_move_time = time.time() + 0.5
+
+def play_ai_move(self):
+    move = self.get_move(board)
+    if move:
+        board.place_move(move, self.symbol)
+        logging.debug(f"{self.name} placed at {move}")
+        return True
+    return False
 
 ai_next_move_time = time.time() + 0.5  # 500ms delay
 input_boxes, buttons = setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT)
@@ -721,7 +797,7 @@ CLICK_TIMEOUT = 1000  # milliseconds
 #start_screen = StartScreenManager(screen, offset_x, offset_y, WIDTH, HEIGHT)
 #show_start_screen = True
 config = None
-turn_manager = TurnManager(game_mode)
+#turn_manager = TurnManager(game_mode)
 #trap_manager = TrapManager(turn_manager)
 debug_mode = True
 waiting_for_continue = False
@@ -756,38 +832,7 @@ while running:
 
     current_player = turn_manager.get_current_player()
 
-    # # Handle human turn
-    # if game_mode == "human_vs_ai" and current_player == "Human":
-    #     for event in pygame.event.get():
-    #         if event.type != pygame.MOUSEMOTION:
-    #             logging.debug(f"[DEBUG] Click at {pygame.mouse.get_pos()}")
-    #             logging.debug(f"[DEBUG] Event type: {event.type}")
-    #
-    #         if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEBUTTONUP:
-    #
-    #             if handle_human_turn(pygame.mouse.get_pos()):
-    #                 turn_manager.advance_turn()
-    #                 pygame.time.set_timer(AI_MOVE_EVENT, 500)
-    #mouse_down_pos = None  # Declare this outside your loop, maybe at the top of your game loop
 
-    # if game_mode == "human_vs_ai" and current_player == "Human":
-    #     for event in pygame.event.get():
-    #         if event.type != pygame.MOUSEMOTION:
-    #             logging.debug(f"[DEBUG] Click at {pygame.mouse.get_pos()}")
-    #             logging.debug(f"[DEBUG] Event type: {event.type}")
-    #
-    #         if event.type == pygame.MOUSEBUTTONDOWN:
-    #             mouse_down_pos = pygame.mouse.get_pos()
-    #
-    #         elif event.type == pygame.MOUSEBUTTONUP:
-    #             mouse_up_pos = pygame.mouse.get_pos()
-    #
-    #             # tolerance check here
-    #             if is_click_stable(mouse_down_pos, mouse_up_pos):
-    #                 if handle_human_turn(mouse_up_pos):
-    #                     turn_manager.advance_turn()
-    #                     pygame.time.set_timer(AI_MOVE_EVENT, 500)
-    #             mouse_down_pos = None  # Reset for next click
     if game_mode == "human_vs_ai" and turn_manager.get_current_player() == "Human":
         for event in pygame.event.get():
             if event.type not in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION]:
@@ -814,6 +859,23 @@ while running:
 
 
     # Handle AI turn
+    # elif current_player.startswith("AI") and not interaction_paused:
+    #     if game_mode == "human_vs_ai":
+    #         handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "O", "X")
+    #         turn_manager.advance_turn()
+    #         pygame.time.set_timer(AI_MOVE_EVENT, 0)
+    #
+    #     elif game_mode == "ai_vs_ai" and time.time() >= ai_next_move_time:
+    #         # if current_player == "AI1":
+    #         #     handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "X", "O")
+    #         # else:
+    #         #     handle_ai_turn("AI2", selected_agent_ai2, iterations_ai2, "O", "X")
+    #         ai_player = player_lookup.get(current_player)
+    #         if ai_player and ai_player.is_ai:
+    #             ai_player.play_ai_move()
+    #
+    #         turn_manager.advance_turn()
+    #         ai_next_move_time = time.time() + 0.5
     elif current_player.startswith("AI") and not interaction_paused:
         if game_mode == "human_vs_ai":
             handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "O", "X")
@@ -821,20 +883,25 @@ while running:
             pygame.time.set_timer(AI_MOVE_EVENT, 0)
 
         elif game_mode == "ai_vs_ai" and time.time() >= ai_next_move_time:
-            # if current_player == "AI1":
-            #     handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "X", "O")
-            # else:
-            #     handle_ai_turn("AI2", selected_agent_ai2, iterations_ai2, "O", "X")
             ai_player = player_lookup.get(current_player)
+            print(f"Ai player is {ai_player}")
             if ai_player and ai_player.is_ai:
-                ai_player.play_ai_move()
+                move_placed = ai_player.play_ai_move()  # Must return True if move was placed
 
-            turn_manager.advance_turn()
-            ai_next_move_time = time.time() + 0.5
+                if move_placed:
+                    # Trap logic only after real move
+                    if turn_manager.should_trigger_trap():
+                        logging.debug(f"[TRAP] Triggering trap at turn {turn_manager.turn_count}")
+                        trap_manager.trigger()
+                        interaction_paused = True
 
+                    turn_manager.advance_turn()
+                    ai_next_move_time = time.time() + 0.5
     # Trap logic
     # Trigger trap if needed
     if trap_manager.should_trigger(turn_manager.turn_count):
+        logging.debug(f"[TRAP] Triggering trap at turn {turn_manager.turn_count}")
+
         trap_manager.trigger()
         interaction_paused = True
 
@@ -843,7 +910,7 @@ while running:
         removed = trap_manager.update(screen)
         if removed:
             interaction_paused = False
-            turn_manager.reset_turn_count()  # Reset turn count after trap
+            #turn_manager.reset_turn_count()  # Reset turn count after trap
             # Trigger AI if it's their turn after trap
             current_player = turn_manager.get_current_player()
             if current_player.startswith("AI"):
@@ -860,9 +927,7 @@ while running:
 
 
     update_game_state()
-    if game_mode != previous_game_mode:
-        logging.debug(f"[WARNING] game_mode changed in main from {previous_game_mode} to {game_mode}")
-    previous_game_mode = game_mode
+
     # Win check
     if check_winner("X") or check_winner("O"):
         winner = "X" if check_winner("X") else "O"
