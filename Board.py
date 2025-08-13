@@ -377,12 +377,12 @@ def handle_events(event, input_boxes):
 
 def handle_start_screen_click(pos):
     global game_mode, selected_agent_ai1, selected_agent_ai2, current_player, player_lookup
-    global iterations_ai1, iterations_ai2, show_start_screen
+    global iterations_ai1, iterations_ai2, show_start_screen, WIDTH, HEIGHT
     global offset_x, offset_y, previous_game_mode, turn_manager, trap_manager
 
     x, y = pos
     print(f"Click at X: {x}, Y: {y}")
-
+    print(f"Click at X: {WIDTH}, Y: {HEIGHT}")
     # Game mode toggle
     if 670 <= x <= 720 and 370 <= y <= 400:
         game_mode = "human_vs_ai"
@@ -715,7 +715,7 @@ def reset_game():
     pending_removal = False
     interaction_paused = False
     game_over = False
-
+    turn_manager.reset_turn_count()
     turn_manager.reset()
 
 def create_agent(agent_type, symbol, opponent_symbol, iterations):
@@ -910,7 +910,7 @@ while running:
         removed = trap_manager.update(screen)
         if removed:
             interaction_paused = False
-            #turn_manager.reset_turn_count()  # Reset turn count after trap
+            turn_manager.reset_turn_count()  # Reset turn count after trap
             # Trigger AI if it's their turn after trap
             current_player = turn_manager.get_current_player()
             if current_player.startswith("AI"):
