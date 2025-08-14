@@ -12,13 +12,15 @@ import sys
 import time
 import pygame
 import logging
+import datetime
 
 
 
 #from sympy import false
 
 ###--- External modules coded by project team
-from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails
+from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails, AnalyticsTrackerAgents
+
 from mcts_AI import MonteCarloAI
 #from start_screen import StartScreenManager
 
@@ -96,15 +98,86 @@ next_player_after_trap = None
 trap_triggered_this_turn = False
 players = []
 player_lookup = {}
-
-
+log_winner=None
+isDraw=False
+play_id=None
+win_count=0
+lose_count=0
+tiles_removed_count=0
+#move_count=0
+move_count = {"X": 0, "O": 0}
 #clock = pygame.time.Clock()
 
 
 ###--- Initializing the analytics
 trackerSummary = AnalyticsTrackerSummary()
 trackerDetails = AnalyticsTrackerDetails()
+agent_logger = AnalyticsTrackerAgents()
+
 AI_MOVE_EVENT = pygame.USEREVENT + 1
+class GameLogger:
+    def __init__(self):
+        self.play_id = None
+        self.game_mode = None
+        self.moves = []
+        self.tiles_removed = 0
+
+    def start_new_game(self, game_mode):
+        self.play_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.game_mode = game_mode
+        self.moves.clear()
+        self.tiles_removed = 0
+        print(f"[LOGGER] New game started: {self.play_id}")
+
+    def log_move(self, player, position, shape, tiles_removed_pos=None):
+        self.moves.append({
+            "play_id": self.play_id,
+            "game_mode": self.game_mode,
+            "player": player,
+            "position": position,
+            "shape": shape,
+            "tiles_removed_pos": tiles_removed_pos or []
+        })
+
+    def log_tile_removal(self, position):
+        self.tiles_removed += 1
+        if self.moves:
+            self.moves[-1]["tiles_removed_pos"].append(position)
+
+    def finalize(self, move_count, board_state):
+        winner_symbol = "X" if check_winner("X") else "O" if check_winner("O") else None
+
+        if winner_symbol:
+            loser_symbol = "O" if winner_symbol == "X" else "X"
+            winner_name = next((m["player"] for m in reversed(self.moves) if m["shape"] == winner_symbol), "Unknown")
+            loser_name = next((m["player"] for m in reversed(self.moves) if m["shape"] == loser_symbol), "Unknown")
+
+            trackerSummary.log_game(
+                play_id=self.play_id,
+                game_mode=self.game_mode,
+                winner=winner_name,
+                win_moves=move_count[winner_symbol],
+                win_shape=winner_symbol,
+                lose=loser_name,
+                lose_moves=move_count[loser_symbol],
+                lose_shape=loser_symbol,
+                tiles_removed=self.tiles_removed
+            )
+        else:
+            trackerSummary.log_game(
+                play_id=self.play_id,
+                game_mode=self.game_mode,
+                winner="Draw",
+                win_moves=0,
+                win_shape="Draw",
+                lose="Draw",
+                lose_moves=0,
+                lose_shape="Draw",
+                tiles_removed=self.tiles_removed
+            )
+
+        for move in self.moves:
+            trackerDetails.log_game(**move)
 
 class Player:
     def __init__(self, name, is_ai, symbol=None, agent=None, iterations=100):
@@ -241,9 +314,11 @@ class TrapManager:
         thickness = 6 if int((elapsed * 4) % 2) else 3
         pygame.draw.rect(screen, RED, (tile_x, tile_y, TILE_SIZE, TILE_SIZE), thickness)
 
+
         if elapsed >= self.animation_duration:
             board_state[row][col] = ""
             clicks[:] = [item for item in clicks if item[1] != self.tile]
+            logger.log_tile_removal([row, col])
             self.reset()
             return True  # Tile was removed
         return False  # Still animating
@@ -427,6 +502,15 @@ def handle_start_screen_click(pos):
         trap_manager = TrapManager()
 
         reset_game()
+
+        agent_logger.log_agents(
+            play_id,
+            game_mode,
+            selected_agent_ai1,
+            iterations_ai1,
+            selected_agent_ai2 if game_mode == "ai_vs_ai" else "Human",
+            iterations_ai2 if game_mode == "ai_vs_ai" else "-"
+        )
 
     if game_mode != previous_game_mode:
         logging.debug(f"[WARNING] game_mode changed in draw start screen from {previous_game_mode} to {game_mode}")
@@ -660,6 +744,7 @@ def handle_human_turn_old(pos):
         return True
     return False
 def handle_human_turn(pos, symbol="X"):
+    global move_count
     if interaction_paused or game_over:
         return False
 
@@ -667,6 +752,8 @@ def handle_human_turn(pos, symbol="X"):
     if board_state[row][col] == "":
         board_state[row][col] = symbol
         clicks.append((symbol, (row, col)))
+        logger.log_move(current_player, [row, col], symbol)
+        move_count[symbol] += 1
         if debug_mode:
             print(f"[DEBUG] Human move registered at ({row}, {col}) with symbol '{symbol}'")
 
@@ -676,6 +763,7 @@ def handle_human_turn(pos, symbol="X"):
     return False
 
 def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
+    global move_count
     if interaction_paused or game_over:
         return None
 
@@ -699,14 +787,17 @@ def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
         clicks.append((symbol, move))
         end_time = time.time()
         print(f"{player_id} placed {symbol} at {move}, took {end_time - start_time:.3f}s")
+        #logger.log_move(current_player, [row, col], symbol)
+        logger.log_move(current_player,move, symbol)
+        move_count[symbol] += 1
         return move
     return None
 def reset_ui():
     global input_boxes, buttons
     input_boxes, buttons = setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT)
 def reset_game():
-    global board_state, clicks, highlight_tile, highlight_start_time
-    global pending_removal, interaction_paused, game_over
+    global board_state, clicks, highlight_tile, highlight_start_time, isDraw, tiles_remove_count
+    global pending_removal, interaction_paused, game_over, winner_count, loser_count, move_count
 
     board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
     clicks = []
@@ -717,6 +808,12 @@ def reset_game():
     game_over = False
     turn_manager.reset_turn_count()
     turn_manager.reset()
+    logger.start_new_game(game_mode)
+    winner_count = 0
+    loser_count = 0
+    move_count = {"X": 0, "O": 0}
+    isDraw = False
+    tiles_remove_count=0
 
 def create_agent(agent_type, symbol, opponent_symbol, iterations):
     if agent_type == "MCTS":
@@ -752,6 +849,7 @@ def play_ai_move(self):
     if move:
         board.place_move(move, self.symbol)
         logging.debug(f"{self.name} placed at {move}")
+
         return True
     return False
 
@@ -790,7 +888,7 @@ pygame.event.set_blocked([
     pygame.WINDOWFOCUSGAINED,
     pygame.TEXTEDITING
 ])
-
+logger = GameLogger()
 mouse_down_pos = None
 mouse_down_time = None
 CLICK_TIMEOUT = 1000  # milliseconds
@@ -850,6 +948,7 @@ while running:
                     if (release_time - mouse_down_time) <= CLICK_TIMEOUT:
                         if is_click_stable(mouse_down_pos, mouse_up_pos):
                             if handle_human_turn(mouse_up_pos):
+
                                 turn_manager.advance_turn()
                                 pygame.time.set_timer(AI_MOVE_EVENT, 500)
 
@@ -857,25 +956,6 @@ while running:
                 mouse_down_time = None
 
 
-
-    # Handle AI turn
-    # elif current_player.startswith("AI") and not interaction_paused:
-    #     if game_mode == "human_vs_ai":
-    #         handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "O", "X")
-    #         turn_manager.advance_turn()
-    #         pygame.time.set_timer(AI_MOVE_EVENT, 0)
-    #
-    #     elif game_mode == "ai_vs_ai" and time.time() >= ai_next_move_time:
-    #         # if current_player == "AI1":
-    #         #     handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "X", "O")
-    #         # else:
-    #         #     handle_ai_turn("AI2", selected_agent_ai2, iterations_ai2, "O", "X")
-    #         ai_player = player_lookup.get(current_player)
-    #         if ai_player and ai_player.is_ai:
-    #             ai_player.play_ai_move()
-    #
-    #         turn_manager.advance_turn()
-    #         ai_next_move_time = time.time() + 0.5
     elif current_player.startswith("AI") and not interaction_paused:
         if game_mode == "human_vs_ai":
             handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "O", "X")
@@ -894,6 +974,8 @@ while running:
                         logging.debug(f"[TRAP] Triggering trap at turn {turn_manager.turn_count}")
                         trap_manager.trigger()
                         interaction_paused = True
+
+
 
                     turn_manager.advance_turn()
                     ai_next_move_time = time.time() + 0.5
@@ -926,56 +1008,110 @@ while running:
                     ai_next_move_time = time.time() + 0.5
 
 
+
     update_game_state()
 
     # Win check
     if check_winner("X") or check_winner("O"):
         winner = "X" if check_winner("X") else "O"
+        logger.finalize(move_count, board_state)
+
         show_game_over_screen(winner)
         game_over = True
+
+
         if game_mode == "human_vs_ai":
             wait_for_game_over_input()
             game_over = False
         else:
             reset_game()
             game_over = False
+        # winner_symbol = "X" if check_winner("X") else "O"
+        # loser_symbol = "O" if winner_symbol == "X" else "X"
 
     # Draw check
     if not check_winner("X") and not check_winner("O"):
         board_full = all(board_state[row][col] != "" for row in range(ROWS) for col in range(COLS))
+
         if board_full:
             show_game_over_screen("Draw")
+            logger.finalize(move_count, board_state)
+
             game_over = True
             if game_mode == "human_vs_ai":
                 wait_for_game_over_input()
                 game_over = False
+
             else:
                 pygame.time.wait(1000)
                 reset_game()
 
     pygame.display.flip()
     clock.tick(60)
-# --- Final Analytics Logging (optional) ---
-trackerSummary.log_game(
-    play_id="ABC1234",
-    game_mode="HvAI",
-    winner="Human",
-    win_moves=22,
-    win_shape='X',
-    lose='AI',
-    lose_moves=21,
-    lose_shape='O',
-    tiles_removed=4
-)
 
-trackerDetails.log_game(
-    play_id="ABC1234",
-    game_mode="HvAI",
-    player="Human",
-    position=[2, 2],
-    shape='X',
-    tiles_removed_pos=['N', 'N']
-)
+# if current_player=="Human":
+#     winner_name="Human"
+#     loser_name="AI"
+#
+# else:
+#     winner_name="AI"
+#     loser_name="Human"
+#
+# if log_winner=="X":
+#     winner_symbol="X"
+#     loser_symbol ="O"
+# else:
+#     winner_symbol="O"
+#     loser_symbol="X"
+
+# logger.finalize(winner_name, winner_symbol, win_count, loser_name, loser_symbol, lose_count)
+#
+# if not isDraw:
+#     trackerSummary.log_game(
+#         play_id=play_id,
+#         game_mode=game_mode,
+#         winner=player_lookup[winner_symbol].name,
+#         win_moves=move_count[winner_symbol],
+#         win_shape=winner_symbol,
+#         lose=player_lookup[loser_symbol].name,
+#         lose_moves=move_count[loser_symbol],
+#         lose_shape=loser_symbol,
+#         tiles_removed=tiles_removed_count
+#     )
+# else:
+#     trackerSummary.log_game(
+#         play_id=play_id,
+#         game_mode=game_mode,
+#         winner="Draw",
+#         win_moves=0,
+#         win_shape="Draw",
+#         lose="Draw",
+#         lose_moves=0,
+#         lose_shape="Draw",
+#         tiles_removed=tiles_removed_count
+#     )
+
+# --- Final Analytics Logging (optional) ---
+# trackerSummary.log_game(
+#     play_id="ABC1234",
+#     game_mode="HvAI",
+#     winner="Human",
+#     win_moves=22,
+#     win_shape='X',
+#     lose='AI',
+#     lose_moves=21,
+#     lose_shape='O',
+#     tiles_removed=4
+# )
+#
+# trackerDetails.log_game(
+#     play_id="ABC1234",
+#     game_mode="HvAI",
+#     player="Human",
+#     position=[2, 2],
+#     shape='X',
+#     tiles_removed_pos=['N', 'N']
+# )
 
 pygame.quit()
 sys.exit()
