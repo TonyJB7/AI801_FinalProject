@@ -16,7 +16,7 @@ import pygame
 import logging
 import datetime
 import pandas as pd
-
+import csv
 
 ###--- External modules coded by project team
 ###--- Import of the analytics output algorithm
@@ -25,9 +25,10 @@ from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails, 
 ###--- Import of all the agents
 from mcts_AI import MonteCarloAI
 from expectimax_AI import RefactoredEngine
-
-
-
+from markov_AI import MarkovAgent
+reward_easy="Markov_config\\rewards.csv"
+reward_hard="Markov_config\\rewards_hard.csv"
+selected_reward=reward_hard
 ###-------------------------------------------------
 ### Initialization of variables, setting, options
 ###
@@ -797,7 +798,8 @@ def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
         move = engine.select_best_move(board_state, symbol)
 
     elif agent_type == "Markov":
-        move = run_markov_agent(board_state, symbol)
+        ai_m = MarkovAgent(symbol, opponent, selected_reward)
+        move= ai_m.select_move(board_state)
     else:
         print(f"Unknown agent type: {agent_type}")
         return None
@@ -962,6 +964,7 @@ waiting_for_continue = False
 running = True
 simulation_counter = 0
 max_simulation = 2
+headless = False
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -979,7 +982,8 @@ while running:
         pygame.display.flip()
         clock.tick(60)
         continue
-    draw_board()
+    if not headless:
+        draw_board()
     #game_mode = "ai_vs_ai"
     # Hover highlight
     if not interaction_paused and not game_over and game_mode == "human_vs_ai":
