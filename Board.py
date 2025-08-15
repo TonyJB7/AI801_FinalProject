@@ -11,20 +11,21 @@ import random
 import sys
 import time
 import pygame
+
+###--- Used for the reporting
 import logging
 import datetime
 import pandas as pd
 
 
-
-
-#from sympy import false
-
 ###--- External modules coded by project team
+###--- Import of the analytics output algorithm
 from analytics_tracker import AnalyticsTrackerSummary, AnalyticsTrackerDetails, AnalyticsTrackerAgents
 
+###--- Import of all the agents
 from mcts_AI import MonteCarloAI
-#from start_screen import StartScreenManager
+from expectimax_AI import RefactoredEngine
+
 
 
 ###-------------------------------------------------
@@ -69,54 +70,66 @@ offset_y = (HEIGHT - BOARD_SIZE) // 2
 scaled_background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-####--- Init Game state
+####--- Init Game state - Go to
 corner_positions = {(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)}
 edge_positions = {(r, c) for r in range(ROWS) for c in range(COLS)
                   if (r, c) not in corner_positions and (r == 0 or c == 0 or r == ROWS - 1 or c == COLS - 1)}
 clicks = []
 board_state = [["" for _ in range(COLS)] for _ in range(ROWS)]
-###--- Booleans
+
+###--- Booleans and flags that changes the states
 highlight_tile = None
 highlight_start_time = None
 interaction_paused = False
 pending_removal = False
 game_over = False
 visualize = True
-debug_mode = True  # Toggle for debug prints
+debug_mode = False  # Toggle for debug prints
+
 ###current_player = "Human"  # or "AI" if AI goes first
+###Initialize the default setting for the menu screen
+
 current_player = "Human"
-last_starting_player = None
-turn_count = 0
 game_mode = "human_vs_ai"
 previous_game_mode=None
-###game_mode = "ai_vs_ai"
 selected_agent_ai1 = "MCTS"
 selected_agent_ai2 = "MCTS"
 iterations_ai1 = 200
 iterations_ai2 = 200
 show_start_screen = True
+
+###--- Initializing the different turn states including traps
+last_starting_player = None
 pending_ai_turn = False
 next_player_after_trap = None
 trap_triggered_this_turn = False
 players = []
 player_lookup = {}
+
+
+###--- Initializing the analytics and flags uses in analytics
+trackerSummary = AnalyticsTrackerSummary()
+trackerDetails = AnalyticsTrackerDetails()
+trackerAgents = AnalyticsTrackerAgents()
 log_winner=None
 isDraw=False
 play_id=None
 win_count=0
 lose_count=0
 tiles_removed_count=0
-#move_count=0
 move_count = {"X": 0, "O": 0}
-#clock = pygame.time.Clock()
+turn_count = 0
 
+###---Debug Variables
+#move_count=0
 
-###--- Initializing the analytics
-trackerSummary = AnalyticsTrackerSummary()
-trackerDetails = AnalyticsTrackerDetails()
-trackerAgents = AnalyticsTrackerAgents()
-
+###--- Making this constant a pygame event so that is can be called as an event
 AI_MOVE_EVENT = pygame.USEREVENT + 1
+
+###---------------------------------------------------
+### The following Module creates the object used for login the moves
+### all of these calls are for the use in analytical reporting
+
 class GameLogger:
     def __init__(self):
         self.play_id = None
@@ -131,6 +144,7 @@ class GameLogger:
         self.tiles_removed = 0
         print(f"[LOGGER] New game started: {self.play_id}")
 
+    ###--- Captures the agent information for AI vs AI
     def log_agents(self, ai1_type, ai1_iterations, ai2_type, ai2_iterations):
         self.agent_info = {
             "AI1_type": ai1_type,
@@ -146,7 +160,7 @@ class GameLogger:
             ai2_type=ai2_type,
             ai2_iterations=ai2_iterations
         )
-
+    ###--- When called it captures the play-by-play of a player or AI each turn
     def log_move(self, player, position, shape, tiles_removed_pos=None):
         self.moves.append({
             "play_id": self.play_id,
@@ -157,11 +171,13 @@ class GameLogger:
             "tiles_removed_pos": tiles_removed_pos or []
         })
 
+    ###--- When called it captures the position of the trapped removed for the purposes of reporting
     def log_tile_removal(self, position):
         self.tiles_removed += 1
         if self.moves:
             self.moves[-1]["tiles_removed_pos"].append(position)
 
+    ###--- When called this is when we write to file the summary and the detailed
     def finalize(self, move_count, board_state):
         winner_symbol = "X" if check_winner("X") else "O" if check_winner("O") else None
 
@@ -196,6 +212,9 @@ class GameLogger:
 
         for move in self.moves:
             trackerDetails.log_game(**move)
+###----------------------------------------------------------------------
+### Traditional Player class that holds the information of the player
+### In this case what matters is the symbol and control of the AI
 
 class Player:
     def __init__(self, name, is_ai, symbol=None, agent=None, iterations=100):
@@ -205,6 +224,7 @@ class Player:
         self.agent = agent    # Optional: your AI agent instance
         self.iterations = iterations  # Optional: for MCTS or other AI configs
 
+    ###--- When called it will verify if it is the ai turn, and will play according to the symbol
     def play_ai_move(self):
         if not self.is_ai or not self.agent:
             print(f"[ERROR] {self.name} has no valid AI agent.")
@@ -216,6 +236,8 @@ class Player:
         opponent_symbol = "O" if self.symbol == "X" else "X"
         move = handle_ai_turn(self.name, self.agent, self.iterations, self.symbol, opponent_symbol)
 
+        ###--- Only record the move if it is considered a valid move
+        ###--- i.e. Space available, correct turn
         if move:
             board_state[move[0]][move[1]] = self.symbol
             clicks.append((self.symbol, move))
@@ -226,7 +248,9 @@ class Player:
         print(f"[WARNING] {self.name} failed to select a move.")
         return False
 
-
+###-------------------------------------------------------------
+### Module to manage the turn of each player, query the current player
+### Find out if it is the 5th turn to trigger the trap tile
 class TurnManager:
     def __init__(self, mode):
         self.mode = mode
@@ -234,6 +258,7 @@ class TurnManager:
         self.current_index = 0
         self.turn_count = 0
 
+    #define the players
     def _init_players(self, mode):
         if mode == "human_vs_ai":
             return ["Human", "AI1"]
@@ -242,25 +267,37 @@ class TurnManager:
         else:
             return ["Human"]
 
+   ###--- Able to query the  current player
     def get_current_player(self):
 
         return self.players[self.current_index]
+    # #Needed fort expectimax
+    # def set_current_player(self, symbol):
+    #     # Optional: map symbol to index if needed
+    #     if symbol == "X":
+    #         self.current_index = 0
+    #     elif symbol == "O":
+    #         self.current_index = 1
 
+    ###--- when called the it changes the player
     def advance_turn(self):
         self.turn_count += 1
         self.current_index = (self.current_index + 1) % len(self.players)
 
+    ###--- checks if its the 5th turn, if so activate the trap
     def should_trigger_trap(self):
         return self.turn_count > 0 and self.turn_count % 5 == 0
-
+    ###--- reset the player turn
     def reset(self):
         #self.turn_count = 0
         self.current_index = 0
-
+    ###--- clear for a new game or round
     def reset_turn_count(self):
         self.turn_count = 0
 
-
+###-------------------------------------------------------------
+### Module to manage the turn of each player, query the current player
+### Find out if it is the 5th turn to trigger the trap tile
 class TrapManager:
     def __init__(self, trigger_interval=5, animation_duration=2.0):
         self.trigger_interval = trigger_interval
@@ -269,14 +306,17 @@ class TrapManager:
         self.tile = None
         self.start_time = None
 
+    ###--- Query if it is the 5th turn. "Mod 5 = 0" means residual 0 on multiples of 5
     def should_trigger(self, turn_count):
         return not self.active and turn_count > 0 and turn_count % self.trigger_interval == 0
 
+    ###--- Start the removal process
     def trigger(self):
         self.tile = choose_random_tile()
         self.start_time = time.time()
         self.active = True
 
+    ###--- once the tile is selected start an animation and then remove
     def update(self, screen):
         if not self.active or not self.tile:
             return False
@@ -297,11 +337,15 @@ class TrapManager:
             return True  # Tile was removed
         return False  # Still animating
 
+    ###--- reset the animation for next time
     def reset(self):
         self.active = False
         self.tile = None
         self.start_time = None
 
+###-----------------------------------------------------------------------------
+### Module to crete the input boxes used for iteration, accept keyboard input
+### and limit the iterations to 10,000
 class InputBox:
     def __init__(self, x, y, w, h, text='', font=None):
         self.rect = pygame.Rect(x, y, w, h)
@@ -331,10 +375,15 @@ class InputBox:
 
     def get_value(self):
         val = int(self.text) if self.text.isdigit() else 0
-        return max(1, min(val, 10000))  # Clamp between 1 and 10,000
+        return max(1, min(val, 10000))  ###--- limit teration between 1 and 10,000
 
 
-###--- Utility functions
+###----------------------------------------------------------
+### Utility functions. These are all the graphical functions
+### Buttons, radio buttons and labes. made into groups for
+### easier movement as a unit
+
+###--- creates an array of
 def setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT):
     font = pygame.font.SysFont(None, 32)
 
@@ -478,9 +527,18 @@ def handle_start_screen_click(pos):
         reset_game()
 
 
-    if game_mode != previous_game_mode:
+    if game_mode != previous_game_mode and debug_mode:
         logging.debug(f"[WARNING] game_mode changed in draw start screen from {previous_game_mode} to {game_mode}")
         previous_game_mode = game_mode
+###---------------------------------------------------------------------------------------
+### End of main menu block
+###---------------------------------------------------------------------------
+
+###----------------------------------------------------------------------------------
+### Draw the game board. Rotate the pieces based on the grid position
+### Initialization at the top of screen
+###-----------------------------------------------------------------------------------
+
 def get_corner_rotation(row, col):
     return {(0, 0): 0, (0, COLS - 1): 270, (ROWS - 1, COLS - 1): 180, (ROWS - 1, 0): 90}.get((row, col), 0)
 
@@ -491,6 +549,24 @@ def get_edge_rotation(row, col):
     elif col == 0: return 90
     return 0
 
+def draw_board():
+    screen.blit(scaled_background, (0, 0))
+    screen.blit(board, (offset_x, offset_y))
+    for row in range(ROWS):
+        for col in range(COLS):
+            x = offset_x + col * TILE_SIZE
+            y = offset_y + row * TILE_SIZE
+            if (row, col) in corner_positions:
+                tile = pygame.transform.rotate(corner_tile, get_corner_rotation(row, col))
+            elif (row, col) in edge_positions:
+                tile = pygame.transform.rotate(edge_tile, get_edge_rotation(row, col))
+            else:
+                tile = center_tile
+            screen.blit(tile, (x, y))
+
+
+
+###--- Used to select the trap tile
 def choose_random_tile():
     return random.randint(0, ROWS - 1), random.randint(0, COLS - 1)
 
@@ -549,20 +625,7 @@ def wait_for_game_over_input():
                     reset_game()
                     waiting = False
 
-def draw_board():
-    screen.blit(scaled_background, (0, 0))
-    screen.blit(board, (offset_x, offset_y))
-    for row in range(ROWS):
-        for col in range(COLS):
-            x = offset_x + col * TILE_SIZE
-            y = offset_y + row * TILE_SIZE
-            if (row, col) in corner_positions:
-                tile = pygame.transform.rotate(corner_tile, get_corner_rotation(row, col))
-            elif (row, col) in edge_positions:
-                tile = pygame.transform.rotate(edge_tile, get_edge_rotation(row, col))
-            else:
-                tile = center_tile
-            screen.blit(tile, (x, y))
+
 
 
 def update_game_state():
@@ -615,86 +678,87 @@ def create_players(game_mode, selected_agent_ai1, selected_agent_ai2, iterations
         ]
     else:
         raise ValueError(f"Unsupported game mode: {game_mode}")
-def create_players_delete(game_mode, selected_agent_ai1, selected_agent_ai2, iterations_ai1, iterations_ai2):
-    if game_mode == "human_vs_ai":
-        return [
-            Player(name="Human", is_ai=False, symbol="X"),
-            Player(name="AI1", is_ai=True, symbol="O",
-                   agent=get_agent(selected_agent_ai1, "O", "X", iterations_ai1),
-                   iterations=iterations_ai1)
-        ]
-    elif game_mode == "ai_vs_ai":
-        return [
-            Player(name="AI1", is_ai=True, symbol="X",
-                   agent=get_agent(selected_agent_ai1, "X", "O", iterations_ai1),
-                   iterations=iterations_ai1),
-            Player(name="AI2", is_ai=True, symbol="O",
-                   agent=get_agent(selected_agent_ai2, "O", "X", iterations_ai2),
-                   iterations=iterations_ai2)
-        ]
+# def create_players_delete(game_mode, selected_agent_ai1, selected_agent_ai2, iterations_ai1, iterations_ai2):
+#     if game_mode == "human_vs_ai":
+#         return [
+#             Player(name="Human", is_ai=False, symbol="X"),
+#             Player(name="AI1", is_ai=True, symbol="O",
+#                    agent=get_agent(selected_agent_ai1, "O", "X", iterations_ai1),
+#                    iterations=iterations_ai1)
+#         ]
+#     elif game_mode == "ai_vs_ai":
+#         return [
+#             Player(name="AI1", is_ai=True, symbol="X",
+#                    agent=get_agent(selected_agent_ai1, "X", "O", iterations_ai1),
+#                    iterations=iterations_ai1),
+#             Player(name="AI2", is_ai=True, symbol="O",
+#                    agent=get_agent(selected_agent_ai2, "O", "X", iterations_ai2),
+#                    iterations=iterations_ai2)
+#         ]
 
-def trap_tile():
-    global highlight_tile, highlight_start_time, pending_removal, interaction_paused
-    global pending_ai_turn, current_player, next_player_after_trap
-    global ai_next_move_time, turn_count, trap_triggered_this_turn
+# def trap_tile():
+#     global highlight_tile, highlight_start_time, pending_removal, interaction_paused
+#     global pending_ai_turn, current_player, next_player_after_trap
+#     global ai_next_move_time, turn_count, trap_triggered_this_turn
+#
+#     #  Trigger trap only once per qualifying turn
+#     if turn_count % 5 == 0 and turn_count != 0 and not pending_removal and not trap_triggered_this_turn:
+#         highlight_tile = choose_random_tile()
+#         highlight_start_time = time.time()
+#         pending_removal = True
+#         interaction_paused = True
+#         trap_triggered_this_turn = True
+#         print(f"Trap triggered. Highlighting tile {highlight_tile}")
+#         return
+#
+#     # Handle trap animation timing and removal
+#     if pending_removal and highlight_tile and highlight_start_time:
+#         elapsed = time.time() - highlight_start_time
+#         if elapsed >= 2:
+#             row, col = highlight_tile
+#
+#             # Remove tile from board and clicks
+#             clicks[:] = [item for item in clicks if item[1] != highlight_tile]
+#             board_state[row][col] = ""
+#
+#             # Reset trap flags
+#             highlight_tile = None
+#             highlight_start_time = None
+#             pending_removal = False
+#             interaction_paused = False
+#
+#             # ▶ Resume correct player
+#             if pending_ai_turn and next_player_after_trap:
+#                 current_player = next_player_after_trap
+#
+#                 if game_mode == "human_vs_ai":
+#                     if current_player == "AI1":
+#                         pygame.time.set_timer(AI_MOVE_EVENT, 500)
+#
+#                 elif game_mode == "ai_vs_ai":
+#                     ai_next_move_time = time.time() + 0.5
+#
+#                 print(f"Trap removed. Resuming turn for {current_player}")
+#                 pending_ai_turn = False
+#                 next_player_after_trap = None
 
-    #  Trigger trap only once per qualifying turn
-    if turn_count % 5 == 0 and turn_count != 0 and not pending_removal and not trap_triggered_this_turn:
-        highlight_tile = choose_random_tile()
-        highlight_start_time = time.time()
-        pending_removal = True
-        interaction_paused = True
-        trap_triggered_this_turn = True
-        print(f"Trap triggered. Highlighting tile {highlight_tile}")
-        return
+# def handle_human_turn_old(pos):
+#     global current_player, turn_count, pending_ai_turn, trap_triggered_this_turn
+#     if interaction_paused or game_over:
+#         return False
+#
+#     row, col = get_tile_from_click(pos)
+#     if board_state[row][col] == "":
+#         board_state[row][col] = "X"
+#         clicks.append(("X", (row, col)))
+#         turn_count += 1
+#         trap_triggered_this_turn = False
+#
+#         # Don't switch turn yet — wait for update_game_state to handle trap
+#         pending_ai_turn = True
+#         return True
+#     return False
 
-    # Handle trap animation timing and removal
-    if pending_removal and highlight_tile and highlight_start_time:
-        elapsed = time.time() - highlight_start_time
-        if elapsed >= 2:
-            row, col = highlight_tile
-
-            # Remove tile from board and clicks
-            clicks[:] = [item for item in clicks if item[1] != highlight_tile]
-            board_state[row][col] = ""
-
-            # Reset trap flags
-            highlight_tile = None
-            highlight_start_time = None
-            pending_removal = False
-            interaction_paused = False
-
-            # ▶ Resume correct player
-            if pending_ai_turn and next_player_after_trap:
-                current_player = next_player_after_trap
-
-                if game_mode == "human_vs_ai":
-                    if current_player == "AI1":
-                        pygame.time.set_timer(AI_MOVE_EVENT, 500)
-
-                elif game_mode == "ai_vs_ai":
-                    ai_next_move_time = time.time() + 0.5
-
-                print(f"Trap removed. Resuming turn for {current_player}")
-                pending_ai_turn = False
-                next_player_after_trap = None
-
-def handle_human_turn_old(pos):
-    global current_player, turn_count, pending_ai_turn, trap_triggered_this_turn
-    if interaction_paused or game_over:
-        return False
-
-    row, col = get_tile_from_click(pos)
-    if board_state[row][col] == "":
-        board_state[row][col] = "X"
-        clicks.append(("X", (row, col)))
-        turn_count += 1
-        trap_triggered_this_turn = False
-
-        # Don't switch turn yet — wait for update_game_state to handle trap
-        pending_ai_turn = True
-        return True
-    return False
 def handle_human_turn(pos, symbol="X"):
     global move_count
     if interaction_paused or game_over:
@@ -722,12 +786,16 @@ def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
     print(f"AI turn started for {player_id}")
     start_time = time.time()
 
+    move = None
     if agent_type == "MCTS":
+        ###--- we need to build the tree first. then selects move
         ai = MonteCarloAI(symbol, opponent, simulations=iterations)
         ai.run_simulation(board_state)
         move = ai.get_best_move()
     elif agent_type == "Expectimax":
-        move = run_expectimax(board_state, symbol, depth=2)
+        engine = RefactoredEngine(max_depth=2, method=agent_type.lower())
+        move = engine.select_best_move(board_state, symbol)
+
     elif agent_type == "Markov":
         move = run_markov_agent(board_state, symbol)
     else:
@@ -739,11 +807,43 @@ def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
         clicks.append((symbol, move))
         end_time = time.time()
         print(f"{player_id} placed {symbol} at {move}, took {end_time - start_time:.3f}s")
-        #logger.log_move(current_player, [row, col], symbol)
-        logger.log_move(current_player,move, symbol)
+        logger.log_move(current_player, move, symbol)
         move_count[symbol] += 1
         return move
     return None
+
+
+# def handle_ai_turn_old(player_id, agent_type, iterations, symbol, opponent):
+#     global move_count
+#     if interaction_paused or game_over:
+#         return None
+#
+#     print(f"AI turn started for {player_id}")
+#     start_time = time.time()
+#
+#     if agent_type == "MCTS":
+#         ai = MonteCarloAI(symbol, opponent, simulations=iterations)
+#         ai.run_simulation(board_state)
+#         move = ai.get_best_move()
+#     elif agent_type == "Expectimax":
+#         # engine = RefactoredEngine(turn_manager, trap_manager, win_manager, max_depth=2)
+#         # move = engine.select_best_move(board_state, symbol, method="expectimax")
+#     elif agent_type == "Markov":
+#         move = run_markov_agent(board_state, symbol)
+#     else:
+#         print(f"Unknown agent type: {agent_type}")
+#         return None
+#
+#     if move:
+#         board_state[move[0]][move[1]] = symbol
+#         clicks.append((symbol, move))
+#         end_time = time.time()
+#         print(f"{player_id} placed {symbol} at {move}, took {end_time - start_time:.3f}s")
+#         #logger.log_move(current_player, [row, col], symbol)
+#         logger.log_move(current_player,move, symbol)
+#         move_count[symbol] += 1
+#         return move
+#     return None
 def reset_ui():
     global input_boxes, buttons
     input_boxes, buttons = setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT)
@@ -774,11 +874,23 @@ def reset_game():
     isDraw = False
     tiles_remove_count=0
 
-def create_agent(agent_type, symbol, opponent_symbol, iterations):
+
+def create_agent(agent_type, depth=2):
+    if agent_type == "MCTS":
+        return lambda board, symbol, opponent, iterations: MonteCarloAI(symbol, opponent, simulations=iterations)
+    elif agent_type == "Expectimax":
+        return lambda board, symbol, opponent, iterations: RefactoredEngine(turn_manager, trap_manager, win_manager, depth).select_best_move(board, symbol, method="expectimax")
+    elif agent_type == "Minimax":
+        return lambda board, symbol, opponent, iterations: RefactoredEngine(turn_manager, trap_manager, win_manager, depth).select_best_move(board, symbol, method="minimax")
+    elif agent_type == "Markov":
+        return lambda board, symbol, opponent, iterations: run_markov_agent(board, symbol)
+    return None
+
+def create_agent_old(agent_type, symbol, opponent_symbol, iterations):
     if agent_type == "MCTS":
         return MonteCarloAI(symbol, opponent_symbol, simulations=iterations)
     elif agent_type == "Expectimax":
-        return ExpectimaxAgent(symbol, opponent_symbol, depth=2)
+        return RefactoredEngine(symbol, opponent_symbol, depth=2)
     elif agent_type == "Markov":
         return MarkovAgent(symbol, opponent_symbol)
     return None
@@ -815,17 +927,17 @@ def play_ai_move(self):
 ai_next_move_time = time.time() + 0.5  # 500ms delay
 input_boxes, buttons = setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT)
 
-if game_mode != previous_game_mode:
-    logging.debug(f"[WARNING] game_mode changed create players from {previous_game_mode} to {game_mode}")
-previous_game_mode = game_mode
-
-if game_mode != previous_game_mode:
-    logging.debug(f"[WARNING] game_mode changed Turn Manager from {previous_game_mode} to {game_mode}")
-previous_game_mode = game_mode
-trap_manager = TrapManager()
-if game_mode != previous_game_mode:
-    logging.debug(f"[WARNING] game_mode changed Trap Manager from {previous_game_mode} to {game_mode}")
-previous_game_mode = game_mode
+# if game_mode != previous_game_mode and debug_mode:
+#     logging.debug(f"[WARNING] game_mode changed create players from {previous_game_mode} to {game_mode}")
+# previous_game_mode = game_mode
+#
+# if game_mode != previous_game_mode and debug_mode:
+#     logging.debug(f"[WARNING] game_mode changed Turn Manager from {previous_game_mode} to {game_mode}")
+# previous_game_mode = game_mode
+# trap_manager = TrapManager()
+# if game_mode != previous_game_mode and debug_mode:
+#     logging.debug(f"[WARNING] game_mode changed Trap Manager from {previous_game_mode} to {game_mode}")
+# previous_game_mode = game_mode
 logging.basicConfig(level=logging.DEBUG)
 #player_lookup = {player.name: player for player in players}
 
