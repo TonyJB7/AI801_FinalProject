@@ -1,5 +1,7 @@
+###---- used  for checking Markov win
+
 def check_winner(symbol, board):
-    # Basic win logic for 3x3
+    ### Basic win logic for 3x3
     for row in board:
         if all(cell == symbol for cell in row):
             return True
