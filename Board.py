@@ -1,8 +1,9 @@
 ###--------------------------------------------------------------------------------
 ### Game: Disrupt-O-Tac
-### Authors: Project Group 2 - Amir Ayazi, Antonio Blanco
-### Date:
-### Description
+### Authors: Project Group 2 -  Antonio Blanco
+### Date: 8/17/2025
+### Description: Main board to evaluate Markov and Expectimax
+###
 ###---------------------------------------------------------------------------------
 
 ###--- Libraries
@@ -37,6 +38,8 @@ pygame.init()
 screen_info = pygame.display.Info()
 clock = pygame.time.Clock()
 
+
+
 ###--- Directories for assets will be relative path
 project_dir = os.path.dirname(os.path.abspath(__file__))
 asset_dir = os.path.join(project_dir, "Art_Assets\\")
@@ -70,7 +73,7 @@ offset_y = (HEIGHT - BOARD_SIZE) // 2
 ###--- Scales based on screen resolution
 scaled_background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-
+pygame.display.set_caption("Disrupt-O-Tac")
 ####--- Init Game state - Go to
 corner_positions = {(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)}
 edge_positions = {(r, c) for r in range(ROWS) for c in range(COLS)
@@ -126,6 +129,12 @@ turn_count = 0
 
 ###--- Making this constant a pygame event so that is can be called as an event
 AI_MOVE_EVENT = pygame.USEREVENT + 1
+def main():
+    # your code here
+    print("Running Board logic...")
+    input("Press Enter to exit...")
+
+
 
 ###---------------------------------------------------
 ### The following Module creates the object used for login the moves
@@ -384,7 +393,7 @@ class InputBox:
 ### Buttons, radio buttons and labes. made into groups for
 ### easier movement as a unit
 
-###--- creates an array of
+###--- creates an array of the GUI elements for easy transport
 def setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT):
     font = pygame.font.SysFont(None, 32)
 
@@ -436,15 +445,15 @@ def draw_start_screen(screen, offset_x, offset_y, WIDTH, HEIGHT, input_boxes, bu
     global  previous_game_mode
     screen.fill((30, 30, 30))
     screen.blit(font.render("Select Game Mode:", True, (255, 255, 255)), (offset_x + 100, offset_y + 120))
-    #pygame.draw.rect(screen, (200, 200, 200), buttons["human_vs_ai"])
-    #pygame.draw.rect(screen, (200, 200, 200), buttons["ai_vs_ai"])
+
     draw_radio_button("Human vs AI", buttons["human_vs_ai"].x + 10, buttons["human_vs_ai"].y + 10,
                       game_mode == "human_vs_ai")
     draw_radio_button("AI vs AI", buttons["ai_vs_ai"].x + 10, buttons["ai_vs_ai"].y + 10, game_mode == "ai_vs_ai")
-    #screen.blit(font.render("Human vs AI", True, (255, 255, 255)), (offset_x + 130, offset_y + 160))
-    #screen.blit(font.render("AI vs AI", True, (255, 255, 255)), (offset_x + 330, offset_y + 160))
+
     screen.blit(font.render("Iterations AI 1:", True, (255, 255, 255)), (offset_x - 10, offset_y + 280))
     agents_search = ["MCTS", "Expectimax", "Markov"]
+
+    ###--- Easy display of the radio buttons
     for i, agent in enumerate(agents_search):
         bx = offset_x + 120 + i * 150
         selected = (agent == selected_agent_ai1)
@@ -538,6 +547,7 @@ def handle_start_screen_click(pos):
 ###----------------------------------------------------------------------------------
 ### Draw the game board. Rotate the pieces based on the grid position
 ### Initialization at the top of screen
+### One image for type of tile, then rotated and moved to fill the board
 ###-----------------------------------------------------------------------------------
 
 def get_corner_rotation(row, col):
@@ -550,6 +560,7 @@ def get_edge_rotation(row, col):
     elif col == 0: return 90
     return 0
 
+###--- This is where the main board that player play
 def draw_board():
     screen.blit(scaled_background, (0, 0))
     screen.blit(board, (offset_x, offset_y))
@@ -571,12 +582,14 @@ def draw_board():
 def choose_random_tile():
     return random.randint(0, ROWS - 1), random.randint(0, COLS - 1)
 
+###--- Captures the position
 def get_tile_from_click(pos):
     x, y = pos
     col = (x - offset_x) // TILE_SIZE
     row = (y - offset_y) // TILE_SIZE
     return row, col
 
+###--- X is two diagonal lines, O is a circle
 def draw_symbol(surface, symbol, x, y):
     if symbol == "X":
         pygame.draw.line(surface, RED, (x - 25, y - 25), (x + 25, y + 25), 5)
@@ -586,14 +599,14 @@ def draw_symbol(surface, symbol, x, y):
 
 def check_winner(symbol):
     for r in range(ROWS):
-        if all(board_state[r][c] == symbol for c in range(COLS)):
+        if all(board_state[r][c] == symbol for c in range(COLS)):###--- Horizonatal check
             return True
     for c in range(COLS):
-        if all(board_state[r][c] == symbol for r in range(ROWS)):
+        if all(board_state[r][c] == symbol for r in range(ROWS)):###--- Vertical check
             return True
-    if all(board_state[i][i] == symbol for i in range(ROWS)):
+    if all(board_state[i][i] == symbol for i in range(ROWS)): ###--Check Diagonal
         return True
-    if all(board_state[i][COLS - 1 - i] == symbol for i in range(ROWS)):
+    if all(board_state[i][COLS - 1 - i] == symbol for i in range(ROWS)): ###--- check Draw
         return True
     return False
 
@@ -610,6 +623,7 @@ def show_game_over_screen(winner):
     pygame.display.flip()
     time.sleep(2)
 
+###--- Keep game over screen until a selection is made.
 def wait_for_game_over_input():
     global running
     waiting = True
@@ -627,8 +641,7 @@ def wait_for_game_over_input():
                     waiting = False
 
 
-
-
+###--- continues updating the board
 def update_game_state():
     global highlight_tile, highlight_start_time
 
@@ -636,6 +649,7 @@ def update_game_state():
     for symbol, (row, col) in clicks:
         x = offset_x + col * TILE_SIZE + TILE_SIZE // 2
         y = offset_y + row * TILE_SIZE + TILE_SIZE // 2
+        #if not headless:
         draw_symbol(screen, symbol, x, y)
 
     # Animate trap tile if active
@@ -647,25 +661,8 @@ def update_game_state():
         thickness = 6 if int((elapsed * 4) % 2) else 3
         pygame.draw.rect(screen, RED, (tile_x, tile_y, TILE_SIZE, TILE_SIZE), thickness)
 
-def create_players_old(game_mode):
-    global previous_game_mode
-    if game_mode == "human_vs_ai":
-        return [
-            Player(name="Human", is_ai=False, symbol="X"),
-            Player(name="AI1", is_ai=True, symbol="O", agent=selected_agent_ai1, iterations=iterations_ai1)
-        ]
-    elif game_mode == "ai_vs_ai":
-        return [
-            Player(name="AI1", is_ai=True, symbol="X", agent=selected_agent_ai1, iterations=iterations_ai1),
-            Player(name="AI2", is_ai=True, symbol="O", agent=selected_agent_ai2, iterations=iterations_ai2)
-        ]
-    else:
-        raise ValueError(f"Unsupported game mode: {game_mode}")
 
-    # if game_mode != previous_game_mode:
-    #     logging.debug(f"[WARNING] game_mode changed from {previous_game_mode} to {game_mode}")
-    # previous_game_mode = game_mode
-
+###--- Uses class player to create the current players based on the selection of game mode
 def create_players(game_mode, selected_agent_ai1, selected_agent_ai2, iterations_ai1, iterations_ai2):
     if game_mode == "human_vs_ai":
         return [
@@ -679,87 +676,9 @@ def create_players(game_mode, selected_agent_ai1, selected_agent_ai2, iterations
         ]
     else:
         raise ValueError(f"Unsupported game mode: {game_mode}")
-# def create_players_delete(game_mode, selected_agent_ai1, selected_agent_ai2, iterations_ai1, iterations_ai2):
-#     if game_mode == "human_vs_ai":
-#         return [
-#             Player(name="Human", is_ai=False, symbol="X"),
-#             Player(name="AI1", is_ai=True, symbol="O",
-#                    agent=get_agent(selected_agent_ai1, "O", "X", iterations_ai1),
-#                    iterations=iterations_ai1)
-#         ]
-#     elif game_mode == "ai_vs_ai":
-#         return [
-#             Player(name="AI1", is_ai=True, symbol="X",
-#                    agent=get_agent(selected_agent_ai1, "X", "O", iterations_ai1),
-#                    iterations=iterations_ai1),
-#             Player(name="AI2", is_ai=True, symbol="O",
-#                    agent=get_agent(selected_agent_ai2, "O", "X", iterations_ai2),
-#                    iterations=iterations_ai2)
-#         ]
 
-# def trap_tile():
-#     global highlight_tile, highlight_start_time, pending_removal, interaction_paused
-#     global pending_ai_turn, current_player, next_player_after_trap
-#     global ai_next_move_time, turn_count, trap_triggered_this_turn
-#
-#     #  Trigger trap only once per qualifying turn
-#     if turn_count % 5 == 0 and turn_count != 0 and not pending_removal and not trap_triggered_this_turn:
-#         highlight_tile = choose_random_tile()
-#         highlight_start_time = time.time()
-#         pending_removal = True
-#         interaction_paused = True
-#         trap_triggered_this_turn = True
-#         print(f"Trap triggered. Highlighting tile {highlight_tile}")
-#         return
-#
-#     # Handle trap animation timing and removal
-#     if pending_removal and highlight_tile and highlight_start_time:
-#         elapsed = time.time() - highlight_start_time
-#         if elapsed >= 2:
-#             row, col = highlight_tile
-#
-#             # Remove tile from board and clicks
-#             clicks[:] = [item for item in clicks if item[1] != highlight_tile]
-#             board_state[row][col] = ""
-#
-#             # Reset trap flags
-#             highlight_tile = None
-#             highlight_start_time = None
-#             pending_removal = False
-#             interaction_paused = False
-#
-#             # ▶ Resume correct player
-#             if pending_ai_turn and next_player_after_trap:
-#                 current_player = next_player_after_trap
-#
-#                 if game_mode == "human_vs_ai":
-#                     if current_player == "AI1":
-#                         pygame.time.set_timer(AI_MOVE_EVENT, 500)
-#
-#                 elif game_mode == "ai_vs_ai":
-#                     ai_next_move_time = time.time() + 0.5
-#
-#                 print(f"Trap removed. Resuming turn for {current_player}")
-#                 pending_ai_turn = False
-#                 next_player_after_trap = None
-
-# def handle_human_turn_old(pos):
-#     global current_player, turn_count, pending_ai_turn, trap_triggered_this_turn
-#     if interaction_paused or game_over:
-#         return False
-#
-#     row, col = get_tile_from_click(pos)
-#     if board_state[row][col] == "":
-#         board_state[row][col] = "X"
-#         clicks.append(("X", (row, col)))
-#         turn_count += 1
-#         trap_triggered_this_turn = False
-#
-#         # Don't switch turn yet — wait for update_game_state to handle trap
-#         pending_ai_turn = True
-#         return True
-#     return False
-
+###--- Every time there is the turn of a human, this function is called everytime
+###--- There is an vlieck click event
 def handle_human_turn(pos, symbol="X"):
     global move_count
     if interaction_paused or game_over:
@@ -779,6 +698,8 @@ def handle_human_turn(pos, symbol="X"):
         #return True
     return False
 
+###--- Based on the AI agent that was selected it will call the appropriate
+###--- AI class module to execute their algorithms
 def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
     global move_count
     if interaction_paused or game_over:
@@ -803,7 +724,7 @@ def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
     else:
         print(f"Unknown agent type: {agent_type}")
         return None
-
+    ###--- only write to board if a valid move was capatured in move
     if move:
         board_state[move[0]][move[1]] = symbol
         clicks.append((symbol, move))
@@ -815,40 +736,13 @@ def handle_ai_turn(player_id, agent_type, iterations, symbol, opponent):
     return None
 
 
-# def handle_ai_turn_old(player_id, agent_type, iterations, symbol, opponent):
-#     global move_count
-#     if interaction_paused or game_over:
-#         return None
-#
-#     print(f"AI turn started for {player_id}")
-#     start_time = time.time()
-#
-#     if agent_type == "MCTS":
-#         ai = MonteCarloAI(symbol, opponent, simulations=iterations)
-#         ai.run_simulation(board_state)
-#         move = ai.get_best_move()
-#     elif agent_type == "Expectimax":
-#         # engine = RefactoredEngine(turn_manager, trap_manager, win_manager, max_depth=2)
-#         # move = engine.select_best_move(board_state, symbol, method="expectimax")
-#     elif agent_type == "Markov":
-#         move = run_markov_agent(board_state, symbol)
-#     else:
-#         print(f"Unknown agent type: {agent_type}")
-#         return None
-#
-#     if move:
-#         board_state[move[0]][move[1]] = symbol
-#         clicks.append((symbol, move))
-#         end_time = time.time()
-#         print(f"{player_id} placed {symbol} at {move}, took {end_time - start_time:.3f}s")
-#         #logger.log_move(current_player, [row, col], symbol)
-#         logger.log_move(current_player,move, symbol)
-#         move_count[symbol] += 1
-#         return move
-#     return None
+### Reset the main menu
 def reset_ui():
     global input_boxes, buttons
     input_boxes, buttons = setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT)
+
+###--- After a game over, if player presses R, the game resets the necessary
+###--- Variables to a clean state.
 def reset_game():
     global board_state, clicks, highlight_tile, highlight_start_time, isDraw, tiles_remove_count
     global pending_removal, interaction_paused, game_over, winner_count, loser_count, move_count
@@ -876,73 +770,57 @@ def reset_game():
     isDraw = False
     tiles_remove_count=0
 
-
-def create_agent(agent_type, depth=2):
-    if agent_type == "MCTS":
-        return lambda board, symbol, opponent, iterations: MonteCarloAI(symbol, opponent, simulations=iterations)
-    elif agent_type == "Expectimax":
-        return lambda board, symbol, opponent, iterations: RefactoredEngine(turn_manager, trap_manager, win_manager, depth).select_best_move(board, symbol, method="expectimax")
-    elif agent_type == "Minimax":
-        return lambda board, symbol, opponent, iterations: RefactoredEngine(turn_manager, trap_manager, win_manager, depth).select_best_move(board, symbol, method="minimax")
-    elif agent_type == "Markov":
-        return lambda board, symbol, opponent, iterations: run_markov_agent(board, symbol)
-    return None
-
-def create_agent_old(agent_type, symbol, opponent_symbol, iterations):
-    if agent_type == "MCTS":
-        return MonteCarloAI(symbol, opponent_symbol, simulations=iterations)
-    elif agent_type == "Expectimax":
-        return RefactoredEngine(symbol, opponent_symbol, depth=2)
-    elif agent_type == "Markov":
-        return MarkovAgent(symbol, opponent_symbol)
-    return None
-
+# ###--- Not used
+# def create_agent(agent_type, depth=2):
+#     if agent_type == "MCTS":
+#         return lambda board, symbol, opponent, iterations: MonteCarloAI(symbol, opponent, simulations=iterations)
+#     elif agent_type == "Expectimax":
+#         return lambda board, symbol, opponent, iterations: RefactoredEngine(turn_manager, trap_manager, win_manager, depth).select_best_move(board, symbol, method="expectimax")
+#     elif agent_type == "Minimax":
+#         return lambda board, symbol, opponent, iterations: RefactoredEngine(turn_manager, trap_manager, win_manager, depth).select_best_move(board, symbol, method="minimax")
+#     elif agent_type == "Markov":
+#         return lambda board, symbol, opponent, iterations: run_markov_agent(board, symbol)
+#     return None
+#
+###--- This is a patch for an issue where pygame was ignoring some clicks from the mouse
 def is_click_stable(pos1, pos2, tolerance=5):
     if pos1 is None or pos2 is None:
         return False
     return abs(pos1[0] - pos2[0]) <= tolerance and abs(pos1[1] - pos2[1]) <= tolerance
 
-def handle_trap_logic():
-    global interaction_paused, ai_next_move_time
-
-    if trap_manager.should_trigger(turn_manager.turn_count):
-        trap_manager.trigger()
-        interaction_paused = True
-
-    if trap_manager.active:
-        removed = trap_manager.update(screen)
-        if removed:
-            interaction_paused = False
-            current_player = turn_manager.get_current_player()
-            if current_player.startswith("AI"):
-                ai_next_move_time = time.time() + 0.5
-
-def play_ai_move(self):
-    move = self.get_move(board)
-    if move:
-        board.place_move(move, self.symbol)
-        logging.debug(f"{self.name} placed at {move}")
-
-        return True
-    return False
+# ###--- Not used, substitued by the TrapManager class.
+# def handle_trap_logic():
+#     global interaction_paused, ai_next_move_time
+#
+#     if trap_manager.should_trigger(turn_manager.turn_count):
+#         trap_manager.trigger()
+#         interaction_paused = True
+#
+#     if trap_manager.active:
+#         removed = trap_manager.update(screen)
+#         if removed:
+#             interaction_paused = False
+#             current_player = turn_manager.get_current_player()
+#             if current_player.startswith("AI"):
+#                 ai_next_move_time = time.time() + 0.5
+#
+# ###---Not used, substituted by handle_ai_turn
+# def play_ai_move(self):
+#     move = self.get_move(board)
+#     if move:
+#         board.place_move(move, self.symbol)
+#         logging.debug(f"{self.name} placed at {move}")
+#
+#         return True
+#     return False
 
 ai_next_move_time = time.time() + 0.5  # 500ms delay
 input_boxes, buttons = setup_ui_elements(offset_x, offset_y, WIDTH, HEIGHT)
 
-# if game_mode != previous_game_mode and debug_mode:
-#     logging.debug(f"[WARNING] game_mode changed create players from {previous_game_mode} to {game_mode}")
-# previous_game_mode = game_mode
-#
-# if game_mode != previous_game_mode and debug_mode:
-#     logging.debug(f"[WARNING] game_mode changed Turn Manager from {previous_game_mode} to {game_mode}")
-# previous_game_mode = game_mode
-# trap_manager = TrapManager()
-# if game_mode != previous_game_mode and debug_mode:
-#     logging.debug(f"[WARNING] game_mode changed Trap Manager from {previous_game_mode} to {game_mode}")
-# previous_game_mode = game_mode
-logging.basicConfig(level=logging.DEBUG)
-#player_lookup = {player.name: player for player in players}
 
+logging.basicConfig(level=logging.DEBUG)
+
+###--- used for debut to filter out some unwantted events from showing
 pygame.event.set_blocked([
     pygame.WINDOWSHOWN,
     pygame.WINDOWENTER,
@@ -950,6 +828,8 @@ pygame.event.set_blocked([
     pygame.WINDOWFOCUSGAINED,
     pygame.TEXTEDITING
 ])
+
+###Some initializations for the main
 logger = GameLogger()
 mouse_down_pos = None
 mouse_down_time = None
@@ -963,9 +843,21 @@ debug_mode = True
 waiting_for_continue = False
 running = True
 simulation_counter = 0
-max_simulation = 2
+###--------------------------------------------------------
+# Change Here fpr the number of simulations for AI vs AI
+max_simulation = 3
+###--------------------------------------------------------
 headless = False
+if headless:
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+###--------------------------------------------------------
+### Main Loop starts here
+### PyGame requires a refresh of the screen per frames there is no input pause
+### All user interactions (Events) are capture here
+###
 while running:
+    ###--- Event to handle the main selection screen
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -982,10 +874,11 @@ while running:
         pygame.display.flip()
         clock.tick(60)
         continue
-    if not headless:
-        draw_board()
+    #if not headless: ###--- used for simulation to prevent GUI
+    draw_board()
     #game_mode = "ai_vs_ai"
-    # Hover highlight
+
+    ###--- Hover highlight when Human is hovering over the board.
     if not interaction_paused and not game_over and game_mode == "human_vs_ai":
         mouse_pos = pygame.mouse.get_pos()
         hover_row, hover_col = get_tile_from_click(mouse_pos)
@@ -996,7 +889,10 @@ while running:
 
     current_player = turn_manager.get_current_player()
 
-
+    ###---------
+    ### Check the current state of the turns, if human turn then
+    ### Check for mouse events and save those x and y positions
+    ###
     if game_mode == "human_vs_ai" and turn_manager.get_current_player() == "Human":
         for event in pygame.event.get():
             if event.type not in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION]:
@@ -1005,7 +901,8 @@ while running:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_down_pos = pygame.mouse.get_pos()
                 mouse_down_time = pygame.time.get_ticks()
-
+            ###--- checking for mouse release due to a bug, this is to
+            ###--- ensure that the click was capture
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 mouse_up_pos = pygame.mouse.get_pos()
                 release_time = pygame.time.get_ticks()
@@ -1021,7 +918,8 @@ while running:
                 mouse_down_pos = None
                 mouse_down_time = None
 
-
+    ###--- checks the turn of the current AI Player, sends the current player information
+    ###--- to Player module and execute the move
     elif current_player.startswith("AI") and not interaction_paused:
         if game_mode == "human_vs_ai":
             handle_ai_turn("AI1", selected_agent_ai1, iterations_ai1, "O", "X")
@@ -1045,21 +943,21 @@ while running:
 
                     turn_manager.advance_turn()
                     ai_next_move_time = time.time() + 0.5
-    # Trap logic
-    # Trigger trap if needed
+    ###--- Trap logic
+    ###--- Trigger trap if needed
     if trap_manager.should_trigger(turn_manager.turn_count):
         logging.debug(f"[TRAP] Triggering trap at turn {turn_manager.turn_count}")
 
         trap_manager.trigger()
         interaction_paused = True
 
-    # Animate trap
+    ###--- Animate trap
     if trap_manager.active:
         removed = trap_manager.update(screen)
         if removed:
             interaction_paused = False
             turn_manager.reset_turn_count()  # Reset turn count after trap
-            # Trigger AI if it's their turn after trap
+            ###--- Trigger AI if it's their turn after trap
             current_player = turn_manager.get_current_player()
             if current_player.startswith("AI"):
                 if game_mode == "human_vs_ai":
@@ -1074,14 +972,16 @@ while running:
                     ai_next_move_time = time.time() + 0.5
 
 
-
+    ###--- After all the moves, evaluations have been complete, update the possition of the
+    ###--- of the board
     update_game_state()
 
-    # Win check
+    ###--- Win check every turn
     if check_winner("X") or check_winner("O"):
         winner = "X" if check_winner("X") else "O"
         logger.finalize(move_count, board_state)
 
+        ####---Turn off after simulation
         show_game_over_screen(winner)
         game_over = True
 
@@ -1107,6 +1007,7 @@ while running:
         board_full = all(board_state[row][col] != "" for row in range(ROWS) for col in range(COLS))
 
         if board_full:
+            ###--- turn off for simulation
             show_game_over_screen("Draw")
             logger.finalize(move_count, board_state)
 
@@ -1131,18 +1032,17 @@ while running:
 pygame.quit()
 
 
-# Load individual logs
+###--- Load individual logs
 summary_df = pd.read_csv("Analytics\\game_stats_summary.csv")
 details_df = pd.read_csv("Analytics\\game_stats_details.csv")
 agents_df = pd.read_csv("Analytics\\game_stats_agents.csv")
 
-# Merge them step-by-step on play_id
+###--- Merge them step-by-step on play_id
 merged_df = summary_df.merge(details_df, on="play_id", how="left")
 merged_df = merged_df.merge(agents_df, on="play_id", how="left")
 
-# Export to a new combined CSV
+###--- Export to a new combined CSV
 merged_df.to_csv("Analytics\\game_stats_combined.csv", index=False)
 
+###--- Game quit
 sys.exit()
-
-
